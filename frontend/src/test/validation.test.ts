@@ -68,7 +68,7 @@ describe('validateResumeFile', () => {
     expect(validateResumeFile(file('cv.doc', 'application/msword'))).toMatch(/PDF and DOCX/)
     expect(validateResumeFile(file('cv.pdf', 'image/png'))).toMatch(/PDF and DOCX/)
     expect(validateResumeFile(file('cv.pdf', 'application/pdf', 0))).toMatch(/empty/)
-    expect(validateResumeFile(file('cv.pdf', 'application/pdf', 6 * 1024 * 1024))).toMatch(/5 MB/)
+    expect(validateResumeFile(file('cv.pdf', 'application/pdf', 5 * 1024 * 1024))).toMatch(/4 MB/)
   })
 })
 

@@ -61,7 +61,7 @@ function UploadCard() {
             <UploadCloud className="size-6" aria-hidden />
           </div>
           <p className="mt-3 font-medium">Drop your resume here, or browse</p>
-          <p className="mt-1 text-sm text-ink-500">PDF or DOCX, up to 5 MB. Text-based files work best — scanned images can’t be read.</p>
+          <p className="mt-1 text-sm text-ink-500">PDF or DOCX, up to 4 MB. Text-based files work best — scanned images can’t be read.</p>
           <input ref={inputRef} type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="sr-only" onChange={(e) => pick(e.target.files?.[0] ?? undefined)} aria-label="Choose resume file" />
           <Button className="mt-4" onClick={() => inputRef.current?.click()} loading={upload.isPending}>
             {upload.isPending ? 'Uploading and reading…' : 'Choose file'}

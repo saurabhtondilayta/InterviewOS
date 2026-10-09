@@ -42,7 +42,8 @@ class Settings(BaseSettings):
     ai_requests_per_day: int = 300
     resume_analyses_per_day: int = 10
 
-    max_resume_bytes: int = Field(default=5 * 1024 * 1024)
+    # 4 MB: Vercel Functions reject request bodies above 4.5 MB.
+    max_resume_bytes: int = Field(default=4 * 1024 * 1024)
     signed_url_ttl_seconds: int = 120
 
     @field_validator("supabase_url", "ai_base_url")

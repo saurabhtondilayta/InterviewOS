@@ -2,6 +2,22 @@
 name = "interviewos-backend"
 version = "1.0.0"
 requires-python = ">=3.11"
+# Keep in sync with requirements.txt (Vercel's Python runtime may install from either file).
+dependencies = [
+  "fastapi==0.143.0",
+  "uvicorn[standard]==0.54.0",
+  "pydantic==2.14.0",
+  "pydantic-settings==2.15.0",
+  "httpx==0.28.1",
+  "postgrest==2.32.0",
+  "storage3==2.32.0",
+  "pypdf==6.20.0",
+  "python-docx==1.2.0",
+  "python-multipart==0.0.32",
+]
+
+[tool.vercel]
+entrypoint = "app.main:app"
 
 [tool.ruff]
 line-length = 140

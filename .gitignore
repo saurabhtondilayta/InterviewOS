@@ -28,3 +28,6 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Vercel CLI local state (project link, OIDC token)
+.vercel/

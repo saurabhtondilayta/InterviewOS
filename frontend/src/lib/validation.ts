@@ -60,7 +60,7 @@ export const newPasswordSchema = z
   .object({ password: passwordSchema, confirm_password: z.string() })
   .refine((d) => d.password === d.confirm_password, { path: ['confirm_password'], error: 'Passwords do not match.' })
 
-export const RESUME_MAX_BYTES = 5 * 1024 * 1024
+export const RESUME_MAX_BYTES = 4 * 1024 * 1024
 export const RESUME_TYPES: Record<string, string> = {
   'application/pdf': '.pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
@@ -71,7 +71,7 @@ export function validateResumeFile(file: File): string | null {
   if (!['.pdf', '.docx'].includes(ext)) return 'Only PDF and DOCX files are supported.'
   if (file.type && !RESUME_TYPES[file.type]) return 'Only PDF and DOCX files are supported.'
   if (file.size === 0) return 'The file is empty.'
-  if (file.size > RESUME_MAX_BYTES) return 'Files must be 5 MB or smaller.'
+  if (file.size > RESUME_MAX_BYTES) return 'Files must be 4 MB or smaller.'
   return null
 }
 

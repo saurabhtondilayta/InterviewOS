@@ -4,6 +4,8 @@ AI-powered interview preparation for students: resume analysis, adaptive mock in
 
 > AI feedback in InterviewOS is **practice guidance**, not an objective measure of employability. Company information is shown with its official source and verification date, and general practice is never presented as official company material.
 
+**Live demo:** https://interviewos-gamma.vercel.app · API: https://interviewos-api.vercel.app/api/docs
+
 ## Features
 
 | Area | What it does |
