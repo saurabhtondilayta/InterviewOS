@@ -1,0 +1,26 @@
+{
+    "name":  "interviewos-e2e",
+    "version":  "1.0.0",
+    "description":  "Step-by-step browser automation tests for InterviewOS (Playwright)",
+    "scripts":  {
+                    "test":  "playwright test tests/journey.spec.ts",
+                    "test:headless":  "cross-env HEADLESS=1 SLOW_MO=0 playwright test tests/journey.spec.ts",
+                    "test:fast":  "cross-env SLOW_MO=0 AI_PAUSE_MS=0 NO_PAUSE=1 playwright test tests/journey.spec.ts",
+                    "interactive":  "playwright test tests/interactive.spec.ts",
+                    "report":  "playwright show-report report",
+                    "cleanup":  "tsx scripts/cleanup.ts",
+                    "typecheck":  "tsc --noEmit",
+                    "demo":  "npm run cleanup \u0026\u0026 cross-env SLOW_MO=700 playwright test tests/journey.spec.ts",
+                    "ui":  "playwright test --ui"
+                },
+    "author":  "",
+    "license":  "ISC",
+    "devDependencies":  {
+                            "@playwright/test":  "^1.64.0",
+                            "@types/node":  "^26.6.4",
+                            "cross-env":  "^10.1.0",
+                            "tsx":  "^4.23.15",
+                            "typescript":  "^7.0.2"
+                        },
+    "type":  "module"
+}
