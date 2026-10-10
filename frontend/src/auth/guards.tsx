@@ -41,7 +41,9 @@ export function RequireAuth() {
   }
 
   const skipped = sessionStorage.getItem(ONBOARDING_SKIP_KEY) === '1'
-  if (!profile.data.profile.onboarding_completed && !skipped && location.pathname !== '/onboarding') {
+  const isStudent = profile.data.profile.account_type !== 'recruiter'
+  const exempt = ['/onboarding', '/invite/', '/apply/', '/invitations', '/assessment/', '/live/'].some((p) => location.pathname.startsWith(p))
+  if (isStudent && !profile.data.profile.onboarding_completed && !skipped && !exempt) {
     return <Navigate to="/onboarding" replace />
   }
   return <Outlet />

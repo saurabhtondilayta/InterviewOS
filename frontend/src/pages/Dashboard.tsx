@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, Bookmark, Building2, CalendarCheck, FileText, Mic, Sparkles, Target, TrendingDown, TrendingUp } from 'lucide-react'
-import { Link } from 'react-router'
+import { Link, Navigate } from 'react-router'
 import { TaskCheckbox } from '@/components/TaskCheckbox'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,7 +8,7 @@ import { Alert, Badge, EmptyState, PageLoader, Progress, ScorePill } from '@/com
 import { useProfile } from '@/hooks/queries'
 import { api, errorMessage } from '@/lib/api'
 import { formatDate, INTERVIEW_TYPE_LABELS, relativeTime, titleCase } from '@/lib/utils'
-import type { DashboardData } from '@/types'
+import type { CandidateInvitation, DashboardData } from '@/types'
 
 function greeting() {
   const h = new Date().getHours()
@@ -17,14 +17,29 @@ function greeting() {
 
 export default function Dashboard() {
   const { data: profileData } = useProfile()
-  const { data, isPending, isError, error, refetch } = useQuery({ queryKey: ['dashboard'], queryFn: () => api.get<DashboardData>('/api/dashboard') })
+  const recruiter = profileData?.profile.account_type === 'recruiter'
+  const { data, isPending, isError, error, refetch } = useQuery({ queryKey: ['dashboard'], queryFn: () => api.get<DashboardData>('/api/dashboard'), enabled: Boolean(profileData) && !recruiter })
+  const invitations = useQuery({ queryKey: ['my-invitations'], queryFn: () => api.get<CandidateInvitation[]>('/api/invitations'), enabled: Boolean(profileData) && !recruiter })
 
   if (!profileData) return <PageLoader />
+  if (recruiter) return <Navigate to="/hr" replace />
   const p = profileData.profile
   const target = p.target_roles[0] ?? p.preferred_role
+  const pendingInvites = (invitations.data ?? []).filter((i) => ['invited', 'accepted', 'in_progress'].includes(i.status))
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {pendingInvites.length > 0 && (
+        <Alert tone="info" title={`${pendingInvites.length} company interview${pendingInvites.length > 1 ? 's' : ''} waiting for you`}>
+          {pendingInvites
+            .slice(0, 3)
+            .map((i) => `${i.company.name} – ${i.assessment.title}`)
+            .join(' · ')}{' '}
+          <Link to="/invitations" className="font-medium underline">
+            Open invitations
+          </Link>
+        </Alert>
+      )}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">

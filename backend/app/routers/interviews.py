@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 
 from ..ai.client import AI_DISCLAIMER
 from ..auth import RequestContext, get_ctx
+from ..errors import ConflictError
 from ..schemas import AnswerSubmit, CodingPracticeCreate, InterviewCreate
 from ..services.interview import engine
 from ..services.interview.rubric import RUBRIC_VERSION
@@ -73,17 +74,26 @@ def next_question(session_id: UUID, ctx: RequestContext = Depends(get_ctx)) -> d
 
 @router.post("/interviews/{session_id}/questions/{question_id}/answer")
 def answer(session_id: UUID, question_id: UUID, body: AnswerSubmit, ctx: RequestContext = Depends(get_ctx)) -> dict:
-    return engine.submit_answer(ctx, str(session_id), str(question_id), body.model_dump()) | {"disclaimer": AI_DISCLAIMER}
+    result = engine.submit_answer(ctx, str(session_id), str(question_id), body.model_dump())
+    if engine.get_session(ctx, str(session_id)).get("results_hidden"):
+        # Company assessment: the company reviews the scores; the candidate only learns it was recorded.
+        return {"evaluation": None, "results_hidden": True, "follow_up_next": result["follow_up_next"], "progress": result["progress"]}
+    return result | {"disclaimer": AI_DISCLAIMER}
 
 
 @router.post("/interviews/{session_id}/end")
 def end(session_id: UUID, ctx: RequestContext = Depends(get_ctx)) -> dict:
-    return engine.end_session(ctx, str(session_id))
+    result = engine.end_session(ctx, str(session_id))
+    if engine.get_session(ctx, str(session_id)).get("results_hidden"):
+        return {"status": result["status"], "report": None, "results_hidden": True}
+    return result
 
 
 @router.delete("/interviews/{session_id}", status_code=204)
 def delete(session_id: UUID, ctx: RequestContext = Depends(get_ctx)) -> None:
-    engine.get_session(ctx, str(session_id))
+    s = engine.get_session(ctx, str(session_id))
+    if s.get("assessment_invitation_id"):
+        raise ConflictError("Interviews taken for a company assessment are part of your application and cannot be deleted.")
     ctx.db.table("interview_sessions").delete().eq("id", str(session_id)).execute()
 
 

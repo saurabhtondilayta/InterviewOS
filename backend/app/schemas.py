@@ -1,6 +1,7 @@
 """Request schemas for the HTTP API (validated by FastAPI/Pydantic)."""
 
-from datetime import date
+import re
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
@@ -159,6 +160,119 @@ class SavedJobCreate(_In):
     job_role_id: str | None = None
     job_listing_id: str | None = None
     notes: str | None = Field(default=None, max_length=1000)
+
+
+# --- hiring (companies / HR) -------------------------------------------------
+class OrgCreate(_In):
+    name: str = Field(min_length=2, max_length=160)
+    website: HttpUrl | None = None
+    industry: str | None = Field(default=None, max_length=120)
+
+
+class OrgMemberAdd(_In):
+    email: str = Field(min_length=3, max_length=254)
+    role: Literal["admin", "recruiter"] = "recruiter"
+
+
+class AssessmentCreate(_In):
+    title: str = Field(min_length=3, max_length=160)
+    role_title: str = Field(min_length=2, max_length=120)
+    job_role_id: str | None = None
+    description: str | None = Field(default=None, max_length=4000)
+    mode: Literal["ai", "live"]
+    interview_type: InterviewTypeLit = "technical"
+    experience_level: Literal["fresher", "junior", "mid", "senior"] = "fresher"
+    difficulty: int = Field(default=3, ge=1, le=5)
+    duration_minutes: int = Field(default=20, ge=5, le=120)
+    topics: list[str] = Field(default_factory=list, max_length=12)
+    proctoring_enabled: bool = True
+    show_results_to_candidate: bool = False
+    accepting_applications: bool = False
+
+
+class AssessmentUpdate(_In):
+    title: str | None = Field(default=None, min_length=3, max_length=160)
+    description: str | None = Field(default=None, max_length=4000)
+    status: Literal["open", "closed"] | None = None
+    accepting_applications: bool | None = None
+    proctoring_enabled: bool | None = None
+    show_results_to_candidate: bool | None = None
+
+
+class InviteRequest(_In):
+    emails: list[str] = Field(min_length=1, max_length=200)
+    scheduled_at: datetime | None = None
+
+    @field_validator("emails")
+    @classmethod
+    def clean_emails(cls, v: list[str]) -> list[str]:
+        out: list[str] = []
+        for raw in v:
+            e = raw.strip().lower()
+            if not e:
+                continue
+            if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", e) or len(e) > 254:
+                raise ValueError(f"Invalid email address: {raw.strip()[:60]}")
+            if e not in out:
+                out.append(e)
+        if not out:
+            raise ValueError("Add at least one email address.")
+        return out
+
+
+class InvitationUpdate(_In):
+    decision: Literal["pending", "shortlisted", "rejected", "hired"] | None = None
+    hr_notes: str | None = Field(default=None, max_length=8000)
+    scheduled_at: datetime | None = None
+
+
+class LiveFeedback(_In):
+    ratings: dict[str, int] = Field(default_factory=dict)
+    notes: str = Field(default="", max_length=8000)
+    recommendation: Literal["strong_hire", "hire", "no_hire", "strong_no_hire", "undecided"] = "undecided"
+
+    @field_validator("ratings")
+    @classmethod
+    def check_ratings(cls, v: dict[str, int]) -> dict[str, int]:
+        if len(v) > 12 or any(not 1 <= int(x) <= 5 for x in v.values()):
+            raise ValueError("Ratings must be 1-5 for at most 12 criteria.")
+        return {k[:60]: int(x) for k, x in v.items()}
+
+
+class InvitationClaim(_In):
+    token: str = Field(min_length=20, max_length=80)
+
+
+class InvitationAccept(_In):
+    consent: Literal[True]
+    share_resume: bool = False
+
+
+ProctorKind = Literal[
+    "session_start",
+    "session_end",
+    "no_face",
+    "multiple_faces",
+    "looking_away",
+    "phone_detected",
+    "tab_hidden",
+    "window_blur",
+    "fullscreen_exit",
+    "copy_paste",
+    "camera_off",
+]
+
+
+class ProctorEvent(_In):
+    kind: ProctorKind
+    severity: int = Field(ge=0, le=3)
+    occurred_at: datetime
+    detail: dict = Field(default_factory=dict)
+    snapshot: str | None = Field(default=None, max_length=120_000)  # base64 JPEG, ~90 KB max
+
+
+class ProctorBatch(_In):
+    events: list[ProctorEvent] = Field(min_length=1, max_length=50)
 
 
 # --- admin ---------------------------------------------------------------

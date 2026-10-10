@@ -1,19 +1,19 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Field, Input, Select } from '@/components/ui/form'
 import { Alert } from '@/components/ui/misc'
 import { TagInput } from '@/components/ui/tag-input'
 import { supabase } from '@/lib/supabase'
-import { authErrorMessage, registerSchema, type RegisterInput, type RegisterValues } from '@/lib/validation'
+import { authErrorMessage, recruiterRegisterSchema, registerSchema, type RecruiterRegisterValues, type RegisterInput, type RegisterValues } from '@/lib/validation'
 import { AuthLayout } from './AuthLayout'
 import { startResendCooldown } from './otp'
 
 const SKILL_SUGGESTIONS = ['Python', 'Java', 'C++', 'JavaScript', 'SQL', 'React', 'Data Structures', 'Git', 'AWS', 'Linux']
 
-export default function Register() {
+function StudentForm() {
   const navigate = useNavigate()
   const [serverError, setServerError] = useState<string | null>(null)
   const {
@@ -63,7 +63,7 @@ export default function Register() {
   const year = new Date().getFullYear()
 
   return (
-    <AuthLayout title="Create your account" subtitle="We'll send a verification code to your email." wide>
+    <>
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
         {serverError && <Alert tone="error">{serverError}</Alert>}
 
@@ -133,6 +133,97 @@ export default function Register() {
           </Link>
         </p>
       </form>
+    </>
+  )
+}
+
+function RecruiterForm() {
+  const navigate = useNavigate()
+  const [serverError, setServerError] = useState<string | null>(null)
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<RecruiterRegisterValues>({ resolver: zodResolver(recruiterRegisterSchema), defaultValues: { company_website: '' }, mode: 'onTouched' })
+
+  const onSubmit = async (v: RecruiterRegisterValues) => {
+    setServerError(null)
+    const { data, error } = await supabase.auth.signUp({
+      email: v.email,
+      password: v.password,
+      options: {
+        // A database trigger creates the profile and the company once the email is verified.
+        data: { account_type: 'recruiter', full_name: v.full_name, designation: v.designation, company_name: v.company_name, company_website: v.company_website },
+      },
+    })
+    if (error) return setServerError(authErrorMessage(error))
+    if (data.user && data.user.identities?.length === 0) return setServerError('An account with this email already exists. Log in instead.')
+    startResendCooldown(v.email)
+    navigate(`/verify-email?email=${encodeURIComponent(v.email)}`)
+  }
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
+      {serverError && <Alert tone="error">{serverError}</Alert>}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Full name" htmlFor="r_full_name" error={errors.full_name?.message} required className="sm:col-span-2">
+          <Input autoComplete="name" {...register('full_name')} />
+        </Field>
+        <Field label="Work email" htmlFor="r_email" error={errors.email?.message} required className="sm:col-span-2">
+          <Input type="email" autoComplete="email" {...register('email')} />
+        </Field>
+        <Field label="Password" htmlFor="r_password" error={errors.password?.message} hint="At least 8 characters with upper- and lowercase letters and a number." required>
+          <Input type="password" autoComplete="new-password" {...register('password')} />
+        </Field>
+        <Field label="Confirm password" htmlFor="r_confirm" error={errors.confirm_password?.message} required>
+          <Input type="password" autoComplete="new-password" {...register('confirm_password')} />
+        </Field>
+      </div>
+      <fieldset className="grid gap-4 border-t border-line pt-5 sm:grid-cols-2">
+        <legend className="mb-1 text-sm font-semibold text-ink-900">Company</legend>
+        <Field label="Company name" htmlFor="company_name" error={errors.company_name?.message} required>
+          <Input autoComplete="organization" {...register('company_name')} />
+        </Field>
+        <Field label="Your role" htmlFor="designation" error={errors.designation?.message} required>
+          <Input placeholder="e.g. HR Manager, Talent Acquisition" {...register('designation')} />
+        </Field>
+        <Field label="Company website (optional)" htmlFor="company_website" error={errors.company_website?.message} className="sm:col-span-2">
+          <Input type="url" placeholder="https://" {...register('company_website')} />
+        </Field>
+      </fieldset>
+      <Button type="submit" className="w-full" size="lg" loading={isSubmitting}>
+        Create company account
+      </Button>
+      <p className="text-center text-sm text-ink-500">
+        Already have an account?{' '}
+        <Link to="/login" className="font-medium text-brand-600 hover:underline">
+          Log in
+        </Link>
+      </p>
+    </form>
+  )
+}
+
+export default function Register() {
+  const [params, setParams] = useSearchParams()
+  const kind = params.get('as') === 'company' ? 'company' : 'student'
+  return (
+    <AuthLayout title="Create your account" subtitle="We'll send a verification code to your email." wide>
+      <div className="mb-6 grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1" role="tablist" aria-label="Account type">
+        {(['student', 'company'] as const).map((k) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={kind === k}
+            onClick={() => setParams(k === 'company' ? { as: 'company' } : {})}
+            className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${kind === k ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-500 hover:text-ink-900'}`}
+          >
+            {k === 'student' ? 'I’m a student' : 'I’m hiring (Company HR)'}
+          </button>
+        ))}
+      </div>
+      {kind === 'student' ? <StudentForm /> : <RecruiterForm />}
     </AuthLayout>
   )
 }

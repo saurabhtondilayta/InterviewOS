@@ -159,10 +159,14 @@ def _normalise(rows: list[dict]) -> list[dict]:
 
 
 def _questions(ctx: RequestContext, session_id: str) -> list[dict]:
+    # Read with the service role, filtered to the owner: evaluations of company assessments are
+    # hidden from the candidate by RLS, but the engine still needs them. Callers have already
+    # verified ownership of the session through get_session().
     return _normalise(
-        ctx.db.table("interview_questions")
+        ctx.admin.table("interview_questions")
         .select("*, interview_responses(id, answer_text), answer_evaluations(id, missing_concepts, follow_up_reason)")
         .eq("session_id", session_id)
+        .eq("user_id", ctx.user_id)
         .order("sequence_no")
         .execute()
         .data
@@ -395,10 +399,11 @@ def submit_answer(ctx: RequestContext, session_id: str, question_id: str, payloa
         raise ConflictError("This interview is not in progress.", code="session_not_active")
 
     qrows = _normalise(
-        ctx.db.table("interview_questions")
+        ctx.admin.table("interview_questions")
         .select("*, interview_responses(*), answer_evaluations(id)")
         .eq("id", question_id)
         .eq("session_id", session_id)
+        .eq("user_id", ctx.user_id)
         .limit(1)
         .execute()
         .data
@@ -518,7 +523,7 @@ def submit_answer(ctx: RequestContext, session_id: str, question_id: str, payloa
 # End + report
 # ---------------------------------------------------------------------------
 def _existing_report(ctx: RequestContext, session_id: str) -> dict | None:
-    rows = ctx.db.table("interview_reports").select("*").eq("session_id", session_id).limit(1).execute().data
+    rows = ctx.admin.table("interview_reports").select("*").eq("session_id", session_id).eq("user_id", ctx.user_id).limit(1).execute().data
     return rows[0] if rows else None
 
 
@@ -530,9 +535,10 @@ def end_session(ctx: RequestContext, session_id: str) -> dict:
 
     qs = _questions(ctx, session_id)
     evals = (
-        ctx.db.table("answer_evaluations")
+        ctx.admin.table("answer_evaluations")
         .select("question_id, question_score, communication_score, dimension_scores, technical_track, technical_scores, feedback")
         .eq("session_id", session_id)
+        .eq("user_id", ctx.user_id)
         .execute()
         .data
         or []
@@ -541,6 +547,7 @@ def end_session(ctx: RequestContext, session_id: str) -> dict:
         ctx.admin.table("interview_sessions").update({"status": "abandoned", "ended_at": _now()}).eq("id", session_id).eq(
             "user_id", ctx.user_id
         ).execute()
+        _complete_assessment(ctx, s)
         return {"status": "abandoned", "report": None}
 
     by_q = {q["id"]: q for q in qs}
@@ -605,7 +612,17 @@ def end_session(ctx: RequestContext, session_id: str) -> dict:
         .data[0]
     )
     ctx.admin.table("interview_sessions").update({"status": "completed"}).eq("id", session_id).eq("user_id", ctx.user_id).execute()
+    _complete_assessment(ctx, s)
     return {"status": "completed", "report": report}
+
+
+def _complete_assessment(ctx: RequestContext, session: dict) -> None:
+    """A company assessment interview has ended: mark the candidate's invitation completed."""
+    inv_id = session.get("assessment_invitation_id")
+    if inv_id:
+        ctx.admin.table("assessment_invitations").update({"status": "completed", "completed_at": _now()}).eq("id", inv_id).eq(
+            "candidate_user_id", ctx.user_id
+        ).neq("status", "completed").execute()
 
 
 def session_detail(ctx: RequestContext, session_id: str) -> dict:
@@ -634,4 +651,37 @@ def session_detail(ctx: RequestContext, session_id: str) -> dict:
         company = rows[0] if rows else None
     session_public = {k: v for k, v in s.items() if k != "plan"}
     session_public["plan_topics"] = s["plan"].get("topics", [])
-    return {"session": session_public, "company": company, "questions": items, "report": _existing_report(ctx, session_id)}
+    hidden = bool(s.get("results_hidden"))
+    assessment = None
+    if s.get("assessment_invitation_id"):
+        inv = (
+            ctx.admin.table("assessment_invitations")
+            .select("assessment_id, org_id")
+            .eq("id", s["assessment_invitation_id"])
+            .limit(1)
+            .execute()
+            .data
+        )
+        if inv:
+            a = ctx.admin.table("assessments").select("title, proctoring_enabled").eq("id", inv[0]["assessment_id"]).limit(
+                1
+            ).execute().data or [{}]
+            org = ctx.admin.table("organizations").select("name").eq("id", inv[0]["org_id"]).limit(1).execute().data or [{}]
+            assessment = {
+                "invitation_id": s["assessment_invitation_id"],
+                "title": a[0].get("title"),
+                "company": org[0].get("name"),
+                "proctoring_enabled": a[0].get("proctoring_enabled", False),
+            }
+    if hidden:
+        for item in items:
+            item["evaluation"] = None
+            item.pop("expected_points", None)
+    return {
+        "session": session_public,
+        "company": company,
+        "questions": items,
+        "report": None if hidden else _existing_report(ctx, session_id),
+        "assessment": assessment,
+        "results_hidden": hidden,
+    }

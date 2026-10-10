@@ -1,6 +1,10 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
   Bot,
+  Briefcase,
+  ClipboardPlus,
+  Mail,
+  Users,
   Building2,
   ChevronDown,
   Code2,
@@ -21,8 +25,9 @@ import { useProfile } from '@/hooks/queries'
 import { cn } from '@/lib/utils'
 import { Logo } from './Logo'
 
-const NAV = [
+const STUDENT_NAV = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/invitations', label: 'Company invitations', icon: Mail },
   { to: '/resume', label: 'Resume analyzer', icon: FileText },
   { to: '/companies', label: 'Companies', icon: Building2 },
   { to: '/interview/new', label: 'Mock interview', icon: Mic },
@@ -32,10 +37,18 @@ const NAV = [
   { to: '/history', label: 'Interview history', icon: History },
 ]
 
+const RECRUITER_NAV = [
+  { to: '/hr', label: 'Hiring dashboard', icon: Briefcase },
+  { to: '/hr/assessments/new', label: 'New assessment', icon: ClipboardPlus },
+  { to: '/hr/team', label: 'Company & team', icon: Users },
+]
+
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {
+  const { data } = useProfile()
+  const nav = data?.profile.account_type === 'recruiter' ? RECRUITER_NAV : STUDENT_NAV
   return (
     <nav aria-label="Main" className="flex flex-col gap-0.5">
-      {NAV.map(({ to, label, icon: Icon }) => (
+      {nav.map(({ to, label, icon: Icon }) => (
         <NavLink
           key={to}
           to={to}
@@ -112,7 +125,7 @@ export function AppShell() {
         <div className="mt-8 flex-1">
           <NavItems />
         </div>
-        <NavLink to="/settings" className={({ isActive }) => cn('flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium', isActive ? 'bg-brand-50 text-brand-700' : 'text-ink-500 hover:bg-slate-100')}>
+        <NavLink end to="/settings" className={({ isActive }) => cn('flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium', isActive ? 'bg-brand-50 text-brand-700' : 'text-ink-500 hover:bg-slate-100')}>
           <Settings className="size-4" aria-hidden /> Settings
         </NavLink>
       </aside>

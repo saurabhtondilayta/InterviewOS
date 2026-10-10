@@ -41,6 +41,22 @@ class Settings(BaseSettings):
     ai_tts_model: str = Field(default="canopylabs/orpheus-v1-english", validation_alias=AliasChoices("AI_TTS_MODEL"))
     ai_tts_voice: str = Field(default="troy", validation_alias=AliasChoices("AI_TTS_VOICE"))
     voice_requests_per_hour: int = 300
+
+    # Public URL of the frontend (used in invitation emails).
+    app_url: str = "http://localhost:5173"
+    # Outgoing email for invitations (optional; without it invitations show in the candidate's
+    # dashboard and HR can copy the invite link).
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from_name: str = "InterviewOS"
+    # Optional TURN relay for live video on restrictive networks (comma-separated URLs).
+    turn_urls: str = ""
+    turn_username: str = ""
+    turn_credential: str = ""
+    proctoring_bucket: str = "proctoring"
+    max_snapshots_per_invitation: int = 40
     max_audio_bytes: int = 4 * 1024 * 1024  # Vercel request-body limit is 4.5 MB
 
     # CORS: comma-separated list of allowed frontend origins

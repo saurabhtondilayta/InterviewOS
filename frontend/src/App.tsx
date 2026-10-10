@@ -25,6 +25,17 @@ const Coach = lazy(() => import('@/pages/Coach'))
 const LearningPlan = lazy(() => import('@/pages/LearningPlan'))
 const History = lazy(() => import('@/pages/History'))
 const Settings = lazy(() => import('@/pages/Settings'))
+const HrHome = lazy(() => import('@/pages/hr/HrHome'))
+const AssessmentNew = lazy(() => import('@/pages/hr/AssessmentNew'))
+const AssessmentDetail = lazy(() => import('@/pages/hr/AssessmentDetail'))
+const CandidateReport = lazy(() => import('@/pages/hr/CandidateReport'))
+const HrLive = lazy(() => import('@/pages/hr/HrLive'))
+const Team = lazy(() => import('@/pages/hr/Team'))
+const Invitations = lazy(() => import('@/pages/candidate/Invitations'))
+const InviteClaim = lazy(() => import('@/pages/candidate/Invitations').then((m) => ({ default: m.InviteClaim })))
+const Apply = lazy(() => import('@/pages/candidate/Invitations').then((m) => ({ default: m.Apply })))
+const AssessmentGate = lazy(() => import('@/pages/candidate/AssessmentGate'))
+const CandidateLive = lazy(() => import('@/pages/candidate/CandidateLive'))
 
 /** Floating coach on the dashboard and preparation pages (not inside the interview room or the coach page itself). */
 function CoachWidgetHost() {
@@ -82,6 +93,19 @@ export default function App() {
             <Route path="/learning" element={<LearningPlan />} />
             <Route path="/history" element={<History />} />
             <Route path="/settings" element={<Settings />} />
+            {/* Company HR */}
+            <Route path="/hr" element={<HrHome />} />
+            <Route path="/hr/assessments/new" element={<AssessmentNew />} />
+            <Route path="/hr/assessments/:id" element={<AssessmentDetail />} />
+            <Route path="/hr/candidates/:id" element={<CandidateReport />} />
+            <Route path="/hr/live/:id" element={<HrLive />} />
+            <Route path="/hr/team" element={<Team />} />
+            {/* Candidates */}
+            <Route path="/invitations" element={<Invitations />} />
+            <Route path="/invite/:token" element={<InviteClaim />} />
+            <Route path="/apply/:token" element={<Apply />} />
+            <Route path="/assessment/:id" element={<AssessmentGate />} />
+            <Route path="/live/:id" element={<CandidateLive />} />
           </Route>
         </Route>
         <Route path="*" element={<NotFound />} />

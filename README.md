@@ -20,6 +20,9 @@ AI-powered interview preparation for students: resume analysis, adaptive mock in
 | AI coach | Personalised chat with persistent history, suggested prompts, copy, clear, delete |
 | Progress | Dashboard from real records only, interview history, per-type trend charts, 7/30-day learning plans with task tracking |
 | Privacy | Data export and full account deletion |
+| Company hiring (HR) | Sign up as **Company HR** → company workspace with team roles (owner/admin/recruiter); create assessments as **AI interviews** or **live 1:1 video interviews** (HR decides); invite candidates by email or share an open application link; per-candidate report with AI scores, transcript, resume, integrity score and proctoring timeline; HR scorecard, notes and hire/reject decision |
+| Live video interview | Browser-to-browser WebRTC call (Supabase Realtime signalling, STUN; optional TURN), mute/camera controls, AI-suggested questions tailored to the role and the candidate's resume, live scorecard |
+| AI proctoring | With candidate consent: in-browser MediaPipe checks for no face, multiple people, looking away, phone in view, plus tab switches, window blur, fullscreen exit and copy/paste. Only events and a few low-res snapshots at flagged moments are uploaded — no video recording. Visible **only to the company's HR members** (RLS); candidates never see it. Integrity score is a transparent penalty sum for human review, not an automatic verdict |
 
 ## Architecture (short version)
 
@@ -115,4 +118,6 @@ e2e/                Playwright browser automation: step-by-step journey + intera
 - The natural server voice (Groq Orpheus) requires accepting its model terms once in the Groq console; until then the browser's built-in voice is used. Speech-to-text (Whisper) works without extra setup.
 - Coding answers are reviewed by the AI, **not executed**. A sandboxed runner (e.g. a self-hosted Judge0) can be added later — see docs/ARCHITECTURE.md.
 - No job listings are pre-seeded: listings must come from official sources via the admin workflow, so a fresh install shows companies with "general role-based practice" until an admin adds listings.
+- Proctoring signals are heuristics (a head turn to think can look like "looking away", a phone face-down is invisible). They flag moments for human review; they cannot prove cheating, and they can be evaded by someone determined (e.g. a second device out of frame).
+- Live video uses public STUN only by default. Behind strict corporate/college firewalls a TURN relay (`TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL`) is needed for the call to connect. Calls are not recorded.
 - Supabase's built-in email service is rate-limited and meant for development; configure custom SMTP before real users sign up.

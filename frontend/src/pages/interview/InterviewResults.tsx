@@ -39,6 +39,43 @@ export default function InterviewResults() {
   if (isError) return <Alert tone="error">{errorMessage(error)}</Alert>
   const { session: s, report, questions } = data
 
+  // Company assessment whose results go only to the company.
+  if (data.results_hidden) {
+    const company = data.assessment?.company ?? 'The company'
+    const submitted = s.status === 'completed'
+    return (
+      <div className="mx-auto max-w-xl space-y-4 animate-fade-in">
+        <Link to="/invitations" className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-ink-900">
+          <ArrowLeft className="size-4" /> Company invitations
+        </Link>
+        <Card>
+          <CardContent className="space-y-3 pt-6 text-center">
+            <CheckCircle2 className="mx-auto size-10 text-emerald-600" aria-hidden />
+            <h1 className="text-xl font-semibold tracking-tight">{submitted ? 'Interview submitted' : 'Interview not submitted yet'}</h1>
+            <p className="text-sm text-ink-600">
+              {submitted
+                ? `${company} will review your answers and contact you about next steps. Scores for this assessment are shared only with the company.`
+                : `Your answers are saved. Submit them to ${company} to finish.`}
+            </p>
+            {!submitted && (
+              <>
+                {generate.isError && <Alert tone="error">{errorMessage(generate.error)}</Alert>}
+                <div className="flex justify-center gap-2">
+                  <Button variant="secondary" asChild>
+                    <Link to={`/interview/${id}`}>Resume</Link>
+                  </Button>
+                  <Button onClick={() => generate.mutate()} loading={generate.isPending}>
+                    Submit interview
+                  </Button>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   const header = (
     <div>
       <Link to="/history" className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-ink-900">

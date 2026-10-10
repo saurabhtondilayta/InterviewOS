@@ -12,7 +12,9 @@ import { Label, Select, Textarea } from '@/components/ui/form'
 import { AIDisclaimer, Alert, Badge, PageLoader, Progress } from '@/components/ui/misc'
 import { ApiError, api, errorMessage } from '@/lib/api'
 import { type MicPermission, queryMicPermission, recordingSupported, requestMicPermission, speak, stopSpeaking, useAnswerRecorder } from '@/lib/speech'
+import { useProctoring } from '@/lib/proctor'
 import { cn, INTERVIEW_TYPE_LABELS } from '@/lib/utils'
+import { ProctorBadge } from '@/components/hiring/media'
 import type { Evaluation, PublicQuestion, SessionDetail } from '@/types'
 
 type Phase = 'ready' | 'answering' | 'evaluated'
@@ -77,6 +79,10 @@ export default function InterviewRoom() {
 
   const session = detail.data?.session
   const countdown = useCountdown(session?.started_at ?? null, session?.duration_minutes ?? 0)
+  const assessment = detail.data?.assessment ?? null
+  const hidden = Boolean(detail.data?.results_hidden)
+  // Company assessments: camera checks run in the browser while the interview is in progress.
+  const proctor = useProctoring({ invitationId: assessment?.invitation_id, enabled: Boolean(assessment?.proctoring_enabled && session?.status === 'in_progress') })
 
   // Restore state when resuming an interview in progress.
   useEffect(() => {
@@ -87,7 +93,7 @@ export default function InterviewRoom() {
     const last = detail.data.questions.at(-1)
     if (s.status === 'in_progress' && last) {
       setQuestion(last)
-      if (!last.response || !last.evaluation) {
+      if (!last.response || (!last.evaluation && !detail.data.results_hidden)) {
         setPhase('answering')
         if (last.response) setAnswer(last.response.answer_text)
       } else {
@@ -165,6 +171,7 @@ export default function InterviewRoom() {
       stopSpeaking()
       qc.invalidateQueries({ queryKey: ['dashboard'] })
       qc.invalidateQueries({ queryKey: ['interview', id] })
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined)
       navigate(`/interview/${id}/results`)
     },
   })
@@ -191,7 +198,7 @@ export default function InterviewRoom() {
       const isCode = question?.kind === 'coding'
       const spoken = (vars?.text ?? answer).trim()
       const text = isCode ? [code.trim(), spoken ? `\n\n/* Explanation:\n${spoken}\n*/` : ''].join('') : spoken
-      return api.post<{ evaluation: Evaluation }>(`/api/interviews/${id}/questions/${question!.id}/answer`, {
+      return api.post<{ evaluation: Evaluation | null; results_hidden?: boolean }>(`/api/interviews/${id}/questions/${question!.id}/answer`, {
         answer_text: text,
         answer_mode: voiceUsed || vars?.text ? 'voice' : 'text',
         duration_seconds: Math.round((Date.now() - questionShownAt.current) / 1000),
@@ -204,7 +211,8 @@ export default function InterviewRoom() {
       setPhase('evaluated')
       qc.invalidateQueries({ queryKey: ['interview', id] })
       // The interviewer responds out loud, then (hands-free) moves on automatically.
-      void say(spokenReply(r.evaluation), () => {
+      // In a company assessment the score is for the company, so the reply stays neutral.
+      void say(r.evaluation ? spokenReply(r.evaluation) : "Thank you, I've recorded your answer. Let's move on.", () => {
         const cur = live.current
         if (cur.mode === 'voice' && cur.handsFree && cur.phase === 'evaluated') next.mutate()
       })
@@ -240,10 +248,17 @@ export default function InterviewRoom() {
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
             <Badge tone="brand">{INTERVIEW_TYPE_LABELS[session.interview_type]}</Badge>
             {detail.data.company && <Badge>{detail.data.company.name}</Badge>}
+            {assessment && <Badge tone="violet">Assessment for {assessment.company}</Badge>}
             <Badge tone={session.is_company_specific ? 'success' : 'neutral'}>{session.is_company_specific ? 'Uses a verified job listing' : 'General role-based practice'}</Badge>
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {assessment?.proctoring_enabled && (
+            <>
+              <video ref={proctor.videoRef} playsInline muted className="h-12 w-16 -scale-x-100 rounded-md bg-slate-900 object-cover" aria-label="Your camera" />
+              <ProctorBadge status={proctor.status} hint={proctor.hint} error={proctor.error} />
+            </>
+          )}
           <div className={cn('flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-mono text-sm tabular-nums', countdown.expired ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-line bg-white')} aria-label="Time remaining" role="timer">
             <Clock className="size-4" aria-hidden /> {session.started_at ? fmt(countdown.remaining) : `${session.duration_minutes}:00`}
           </div>
@@ -487,6 +502,30 @@ export default function InterviewRoom() {
                   )}
                 </div>
               </>
+            )}
+
+            {phase === 'evaluated' && !evaluation && hidden && (
+              <Card>
+                <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-5">
+                  <p className="text-sm text-ink-700">Answer recorded. {assessment?.company ?? 'The company'} reviews the scores; they are not shown during the interview.</p>
+                  {countdown.expired ? (
+                    <Button onClick={() => finish.mutate()} loading={finish.isPending}>
+                      Finish and submit
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => {
+                        stopSpeaking()
+                        setSpeaking(false)
+                        next.mutate()
+                      }}
+                      loading={next.isPending || finish.isPending}
+                    >
+                      Next question
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
             )}
           </div>
         </div>

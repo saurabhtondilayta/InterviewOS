@@ -44,6 +44,30 @@ export const registerSchema = z
 export type RegisterInput = z.input<typeof registerSchema>
 export type RegisterValues = z.output<typeof registerSchema>
 
+/** Company HR sign-up: creates a company account; the recruiter becomes its owner. */
+export const recruiterRegisterSchema = z
+  .object({
+    full_name: z
+      .string()
+      .trim()
+      .min(2, { error: 'Enter your full name.' })
+      .max(120)
+      .regex(/^[\p{L}\p{M}' .-]+$/u, { error: 'Use letters, spaces, apostrophes or hyphens only.' }),
+    email: emailSchema,
+    password: passwordSchema,
+    confirm_password: z.string(),
+    company_name: requiredText('Company name', 160).pipe(z.string().min(2, { error: 'Enter the company name.' })),
+    company_website: z
+      .string()
+      .trim()
+      .max(200)
+      .refine((v) => v === '' || /^https?:\/\/\S+\.\S+/.test(v), { error: 'Use a full address like https://company.com' }),
+    designation: requiredText('Your role', 120),
+  })
+  .refine((d) => d.password === d.confirm_password, { path: ['confirm_password'], error: 'Passwords do not match.' })
+
+export type RecruiterRegisterValues = z.infer<typeof recruiterRegisterSchema>
+
 export const loginSchema = z.object({
   email: emailSchema,
   password: z.string().min(1, { error: 'Enter your password.' }),

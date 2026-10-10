@@ -39,7 +39,110 @@ export interface Profile {
   improvement_areas: string[]
   weekly_study_hours: number | null
   onboarding_completed: boolean
+  account_type: 'student' | 'recruiter'
+  designation: string | null
   created_at: string
+}
+
+// --- hiring --------------------------------------------------------------
+export interface Org {
+  id: string
+  name: string
+  website: string | null
+  industry: string | null
+}
+
+export interface OrgOverview {
+  org: Org
+  role: 'owner' | 'admin' | 'recruiter'
+  members: { user_id: string; role: string; profiles: { full_name: string; email: string; designation: string | null } | null }[]
+}
+
+export interface Assessment {
+  id: string
+  title: string
+  role_title: string
+  job_role_id: string | null
+  description: string | null
+  mode: 'ai' | 'live'
+  interview_type: InterviewType
+  experience_level: string
+  difficulty: number
+  duration_minutes: number
+  topics: string[]
+  proctoring_enabled: boolean
+  show_results_to_candidate: boolean
+  accepting_applications: boolean
+  public_token: string
+  status: 'open' | 'closed'
+  created_at: string
+  apply_link?: string
+  counts?: { total: number; completed: number; pending: number }
+}
+
+export type InvitationStatus = 'invited' | 'accepted' | 'declined' | 'in_progress' | 'completed' | 'cancelled'
+export type Decision = 'pending' | 'shortlisted' | 'rejected' | 'hired'
+
+export interface InvitationRow {
+  id: string
+  candidate_email: string
+  candidate_name: string | null
+  status: InvitationStatus
+  scheduled_at: string | null
+  decision: Decision
+  integrity_score: number | null
+  ai_score: number | null
+  created_at: string
+  completed_at: string | null
+}
+
+export interface ProctorEventRow {
+  id: string
+  kind: string
+  severity: number
+  detail: Record<string, unknown>
+  occurred_at: string
+  snapshot_url?: string | null
+}
+
+export interface ProctorSummary {
+  verdict?: string
+  flags?: { kind: string; label: string; count: number; penalty: number }[]
+  total_flags?: number
+  note?: string
+}
+
+export interface LiveFeedback {
+  ratings?: Record<string, number>
+  notes?: string
+  recommendation?: 'strong_hire' | 'hire' | 'no_hire' | 'strong_no_hire' | 'undecided'
+}
+
+export interface CandidateReport {
+  invitation: InvitationRow & { hr_notes: string | null; hr_feedback: LiveFeedback; share_resume: boolean; session_id: string | null; proctoring_summary: ProctorSummary; live_started_at: string | null; live_ended_at: string | null }
+  assessment: Assessment
+  candidate: { full_name: string; email: string; college: string | null; degree: string | null; branch: string | null; graduation_year: number | null; preferred_role: string | null; years_experience: number; skills: string[] } | null
+  resume: { filename: string; url: string | null } | null
+  interview: {
+    session: { status: string; started_at: string | null; ended_at: string | null; answer_mode: string } | null
+    report: InterviewReport | null
+    questions: { sequence_no: number; topic: string; kind: string; difficulty: number; question_text: string; is_follow_up: boolean; response: { answer_text: string; answer_mode: string } | null; evaluation: Partial<Evaluation> | null }[]
+  } | null
+  proctoring: { enabled: boolean; integrity_score: number | null; summary: ProctorSummary; events: ProctorEventRow[] }
+}
+
+export interface CandidateInvitation {
+  id: string
+  status: InvitationStatus
+  scheduled_at: string | null
+  consent_at: string | null
+  share_resume: boolean
+  session_id: string | null
+  created_at: string
+  completed_at: string | null
+  results_visible: boolean
+  company: { name: string; website: string | null }
+  assessment: Pick<Assessment, 'id' | 'title' | 'role_title' | 'description' | 'mode' | 'interview_type' | 'difficulty' | 'duration_minutes' | 'proctoring_enabled' | 'status'>
 }
 
 export interface ProfilePayload {
@@ -257,6 +360,8 @@ export interface SessionDetail {
   })[]
   report: InterviewReport | null
   disclaimer: string
+  results_hidden?: boolean
+  assessment?: { invitation_id: string; title: string; company: string; proctoring_enabled: boolean } | null
 }
 
 export interface PlanTask {
