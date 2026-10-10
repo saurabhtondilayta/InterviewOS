@@ -13,8 +13,8 @@ AI-powered interview preparation for students: resume analysis, adaptive mock in
 | Auth | Email + password sign-up with **email OTP verification** (Supabase Auth), login, logout, OTP password reset, session persistence, protected routes |
 | Onboarding & profile | Education, skills, languages, projects, internships, certifications, target roles/companies, improvement areas; editable any time |
 | Resume analyzer | PDF/DOCX upload to a private bucket, server-side text extraction, contact-detail redaction, AI analysis in 10 sections, documented practice score, JD comparison, bullet rewrites, Markdown report download |
-| Mock interviews | 8 interview types, explainable **adaptive algorithm** (topic selection, difficulty adjustment, follow-ups), rubric scoring, per-answer feedback, final report |
-| Voice room | Browser text-to-speech for questions, browser speech recognition with near-live transcript, editable transcript, mute/repeat/end, timer, progress, text fallback |
+| Mock interviews | 8 interview types, explainable **adaptive algorithm** (topic selection, difficulty adjustment, follow-ups), 265-question original bank mixed with AI questions, cross-session repeat avoidance, resume deep-dive questions, rubric scoring, final report |
+| Voice room | AI interviewer speaks questions and spoken feedback (server TTS, browser-voice fallback); answers recorded and transcribed server-side (Whisper); hands-free conversation mode; editable transcript; text fallback |
 | Coding practice | Generated problems; AI code review on a separate technical track (code is not executed) |
 | Companies | Real employers with official URLs and verification dates; listings only from official sources (Greenhouse/Lever public APIs or admin-registered official URLs); refresh workflow |
 | AI coach | Personalised chat with persistent history, suggested prompts, copy, clear, delete |
@@ -112,7 +112,7 @@ e2e/                Playwright browser automation: step-by-step journey + intera
 
 ## Known limitations
 
-- Voice recognition depends on the browser's Web Speech API (Chrome, Edge, Safari). Firefox users get text mode. In Chrome/Edge, audio is processed by the browser vendor's speech service.
+- The natural server voice (Groq Orpheus) requires accepting its model terms once in the Groq console; until then the browser's built-in voice is used. Speech-to-text (Whisper) works without extra setup.
 - Coding answers are reviewed by the AI, **not executed**. A sandboxed runner (e.g. a self-hosted Judge0) can be added later — see docs/ARCHITECTURE.md.
 - No job listings are pre-seeded: listings must come from official sources via the admin workflow, so a fresh install shows companies with "general role-based practice" until an admin adds listings.
 - Supabase's built-in email service is rate-limited and meant for development; configure custom SMTP before real users sign up.

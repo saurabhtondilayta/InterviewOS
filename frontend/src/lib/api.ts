@@ -42,7 +42,7 @@ export function setUnauthorizedHandler(fn: () => void) {
   onUnauthorized = fn
 }
 
-export async function request<T>(method: Method, path: string, body?: unknown, init?: { raw?: boolean }): Promise<T> {
+export async function request<T>(method: Method, path: string, body?: unknown, init?: { raw?: boolean; blob?: boolean }): Promise<T> {
   const headers: Record<string, string> = await authHeader()
   let payload: BodyInit | undefined
   if (body instanceof FormData) {
@@ -65,6 +65,7 @@ export async function request<T>(method: Method, path: string, body?: unknown, i
     throw err
   }
   if (res.status === 204) return undefined as T
+  if (init?.blob) return (await res.blob()) as T
   if (init?.raw) return (await res.text()) as T
   return (await res.json()) as T
 }
@@ -77,6 +78,7 @@ export const api = {
   del: (path: string) => request<void>('DELETE', path),
   text: (path: string) => request<string>('GET', path, undefined, { raw: true }),
   upload: <T>(path: string, form: FormData) => request<T>('POST', path, form),
+  postForBlob: (path: string, body: unknown) => request<Blob>('POST', path, body, { blob: true }),
 }
 
 export function errorMessage(err: unknown): string {

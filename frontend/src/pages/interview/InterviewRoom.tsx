@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Clock, Keyboard, Mic, MicOff, Square, Volume2, VolumeX } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Clock, Headphones, Keyboard, Loader2, Mic, Square, Volume2, VolumeX } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router'
 import { CodeEditor } from '@/components/interview/CodeEditor'
 import { EvaluationCard } from '@/components/interview/EvaluationCard'
@@ -11,7 +11,7 @@ import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/
 import { Label, Select, Textarea } from '@/components/ui/form'
 import { AIDisclaimer, Alert, Badge, PageLoader, Progress } from '@/components/ui/misc'
 import { ApiError, api, errorMessage } from '@/lib/api'
-import { type MicPermission, queryMicPermission, requestMicPermission, speak, stopSpeaking, ttsSupported, useSpeechRecognition } from '@/lib/speech'
+import { type MicPermission, queryMicPermission, recordingSupported, requestMicPermission, speak, stopSpeaking, useAnswerRecorder } from '@/lib/speech'
 import { cn, INTERVIEW_TYPE_LABELS } from '@/lib/utils'
 import type { Evaluation, PublicQuestion, SessionDetail } from '@/types'
 
@@ -38,6 +38,15 @@ const MIC_LABEL: Record<MicPermission, string> = {
   unsupported: 'Not supported',
 }
 
+/** What the AI interviewer says after evaluating an answer. */
+function spokenReply(ev: Evaluation): string {
+  const s = ev.question_score
+  const opener = s >= 7.5 ? 'Good answer.' : s >= 5 ? 'Thanks, that was partly there.' : s >= 3 ? 'Okay, thanks.' : "Alright, let's work on that one."
+  const feedback = (ev.feedback.match(/[^.!?]+[.!?]/g) ?? [ev.feedback]).slice(0, 2).join(' ').trim()
+  const close = ev.needs_follow_up ? 'I have a quick follow-up question.' : "Let's move on."
+  return `${opener} ${feedback} ${close}`
+}
+
 export default function InterviewRoom() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -48,6 +57,7 @@ export default function InterviewRoom() {
   const [question, setQuestion] = useState<PublicQuestion | null>(null)
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null)
   const [mode, setMode] = useState<'voice' | 'text'>('text')
+  const [handsFree, setHandsFree] = useState(true)
   const [muted, setMuted] = useState(false)
   const [lang, setLang] = useState('en-IN')
   const [answer, setAnswer] = useState('')
@@ -59,8 +69,12 @@ export default function InterviewRoom() {
   const [voiceUsed, setVoiceUsed] = useState(false)
   const questionShownAt = useRef<number>(Date.now())
   const initialised = useRef(false)
+  const recorder = useAnswerRecorder()
 
-  const speech = useSpeechRecognition(lang)
+  // Latest values for async voice callbacks (avoid stale closures).
+  const live = useRef({ mode, handsFree, muted, lang, question, phase, answer })
+  live.current = { mode, handsFree, muted, lang, question, phase, answer }
+
   const session = detail.data?.session
   const countdown = useCountdown(session?.started_at ?? null, session?.duration_minutes ?? 0)
 
@@ -69,7 +83,7 @@ export default function InterviewRoom() {
     if (!detail.data || initialised.current) return
     initialised.current = true
     const s = detail.data.session
-    setMode(s.answer_mode)
+    setMode(s.answer_mode === 'voice' && recordingSupported() ? 'voice' : 'text')
     const last = detail.data.questions.at(-1)
     if (s.status === 'in_progress' && last) {
       setQuestion(last)
@@ -84,32 +98,65 @@ export default function InterviewRoom() {
     queryMicPermission().then(setMic)
   }, [detail.data])
 
-  // Stop audio when leaving the page.
+  // Stop audio and microphone when leaving the page.
   useEffect(() => () => stopSpeaking(), [])
 
-  // Keep the transcript in the editable answer box while dictating.
-  useEffect(() => {
-    if (speech.listening) setAnswer(speech.finalText)
-  }, [speech.finalText, speech.listening])
+  /** The interviewer speaks, then runs `after` (unless muted, in which case `after` runs immediately). */
+  const say = async (text: string, after?: () => void) => {
+    if (live.current.mode !== 'voice' || live.current.muted) {
+      after?.()
+      return
+    }
+    setSpeaking(true)
+    await speak(text, { lang: live.current.lang })
+    setSpeaking(false)
+    after?.()
+  }
 
-  const say = useCallback(
-    (text: string) => {
-      if (muted || !ttsSupported()) return
-      setSpeaking(true)
-      speak(text, { lang, onEnd: () => setSpeaking(false) })
-    },
-    [muted, lang],
-  )
+  /** Record the spoken answer, transcribe it, and (hands-free) submit it. */
+  const listen = async () => {
+    const q = live.current.question
+    if (!q) return
+    stopSpeaking()
+    setSpeaking(false)
+    setError(null)
+    if (mic !== 'granted') {
+      const p = await requestMicPermission()
+      setMic(p)
+      if (p !== 'granted') {
+        setError('Microphone access is needed for voice answers. Allow it in your browser, or type your answer.')
+        return
+      }
+    }
+    const blob = await recorder.start({ silenceMs: live.current.handsFree ? 2200 : undefined, maxSeconds: 240 })
+    if (!blob) {
+      if (live.current.handsFree) setError("I didn't catch anything. Press “Start speaking” to try again, or type your answer.")
+      return
+    }
+    const text = await recorder.transcribe(blob, q.id)
+    if (!text) return
+    setVoiceUsed(true)
+    const prev = live.current.answer.trim()
+    const full = prev ? `${prev} ${text}` : text
+    setAnswer(full)
+    if (live.current.handsFree && q.kind !== 'coding' && live.current.question?.id === q.id) submit.mutate({ text: full })
+  }
 
   const showQuestion = (q: PublicQuestion) => {
     setQuestion(q)
+    live.current.question = q
     setEvaluation(null)
     setAnswer('')
     setCode('')
     setVoiceUsed(false)
     setPhase('answering')
+    setError(null)
     questionShownAt.current = Date.now()
-    if (mode === 'voice') say(q.question_text)
+    const intro = q.is_follow_up ? 'Follow-up question.' : `Question ${q.sequence_no}.`
+    void say(`${intro} ${q.question_text}`, () => {
+      const cur = live.current
+      if (cur.mode === 'voice' && cur.handsFree && q.kind !== 'coding' && cur.question?.id === q.id) void listen()
+    })
   }
 
   const finish = useMutation({
@@ -126,8 +173,9 @@ export default function InterviewRoom() {
     mutationFn: () => api.post<{ done: boolean; question: PublicQuestion | null }>(`/api/interviews/${id}/next`),
     onSuccess: (r) => {
       setError(null)
-      if (r.done || !r.question) finish.mutate()
-      else {
+      if (r.done || !r.question) {
+        void say('That completes the interview. Let me prepare your report.', () => finish.mutate())
+      } else {
         showQuestion(r.question)
         qc.invalidateQueries({ queryKey: ['interview', id] })
       }
@@ -139,12 +187,13 @@ export default function InterviewRoom() {
   })
 
   const submit = useMutation({
-    mutationFn: () => {
+    mutationFn: (vars?: { text?: string }) => {
       const isCode = question?.kind === 'coding'
-      const text = isCode ? [code.trim(), answer.trim() ? `\n\n/* Explanation:\n${answer.trim()}\n*/` : ''].join('') : answer.trim()
+      const spoken = (vars?.text ?? answer).trim()
+      const text = isCode ? [code.trim(), spoken ? `\n\n/* Explanation:\n${spoken}\n*/` : ''].join('') : spoken
       return api.post<{ evaluation: Evaluation }>(`/api/interviews/${id}/questions/${question!.id}/answer`, {
         answer_text: text,
-        answer_mode: voiceUsed ? 'voice' : 'text',
+        answer_mode: voiceUsed || vars?.text ? 'voice' : 'text',
         duration_seconds: Math.round((Date.now() - questionShownAt.current) / 1000),
         code_language: isCode ? codeLang : null,
       })
@@ -154,6 +203,11 @@ export default function InterviewRoom() {
       setEvaluation(r.evaluation)
       setPhase('evaluated')
       qc.invalidateQueries({ queryKey: ['interview', id] })
+      // The interviewer responds out loud, then (hands-free) moves on automatically.
+      void say(spokenReply(r.evaluation), () => {
+        const cur = live.current
+        if (cur.mode === 'voice' && cur.handsFree && cur.phase === 'evaluated') next.mutate()
+      })
     },
     onError: (e) => setError(`${errorMessage(e)} Your answer was kept — you can submit again.`),
   })
@@ -167,25 +221,15 @@ export default function InterviewRoom() {
   const progress = Math.min(100, (mainAsked / session.target_question_count) * 100)
   const isCoding = question?.kind === 'coding'
   const canSubmit = isCoding ? code.trim().length > 0 || answer.trim().length > 0 : answer.trim().length > 0
+  const recording = recorder.state === 'recording'
+  const transcribing = recorder.state === 'transcribing'
+  const busy = recording || transcribing || submit.isPending
 
-  const toggleMic = async () => {
-    if (speech.listening) {
-      speech.stop()
-      return
-    }
-    stopSpeaking()
-    setSpeaking(false)
-    if (mic !== 'granted') {
-      const p = await requestMicPermission()
-      setMic(p)
-      if (p !== 'granted') {
-        setError('Microphone access is needed for voice answers. You can type your answer instead.')
-        return
-      }
-    }
-    setVoiceUsed(true)
-    speech.start(answer)
-  }
+  let status: { text: string; tone: string } | null = null
+  if (speaking) status = { text: 'Interviewer is speaking…', tone: 'text-brand-700' }
+  else if (recording) status = { text: `Listening… ${recorder.seconds}s${handsFree ? ' · pause for 2 seconds when you’re done' : ''}`, tone: 'text-rose-600' }
+  else if (transcribing) status = { text: 'Transcribing your answer…', tone: 'text-ink-500' }
+  else if (submit.isPending) status = { text: 'Evaluating your answer…', tone: 'text-ink-500' }
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -219,7 +263,8 @@ export default function InterviewRoom() {
                     variant="danger"
                     loading={finish.isPending}
                     onClick={() => {
-                      speech.stop()
+                      recorder.stop()
+                      stopSpeaking()
                       finish.mutate()
                     }}
                   >
@@ -246,7 +291,7 @@ export default function InterviewRoom() {
           Finish your current answer, then end the interview to see your report.
         </Alert>
       )}
-      {error && <Alert tone="error">{error}</Alert>}
+      {(error || recorder.error) && <Alert tone="error">{error ?? recorder.error}</Alert>}
 
       {/* Pre-start */}
       {phase === 'ready' && (
@@ -255,7 +300,7 @@ export default function InterviewRoom() {
             <div>
               <h2 className="text-lg font-semibold">Before you start</h2>
               <p className="mt-1 text-sm text-ink-500">
-                The AI interviewer asks one question at a time. After each answer you’ll see feedback, and the next question adapts to how you did. About {session.target_question_count} questions in {session.duration_minutes} minutes.
+                The AI interviewer asks one question at a time and adapts to your answers. About {session.target_question_count} questions in {session.duration_minutes} minutes.
               </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
@@ -263,14 +308,14 @@ export default function InterviewRoom() {
                 <Label>Answer mode</Label>
                 <div className="grid grid-cols-2 gap-2">
                   {(['voice', 'text'] as const).map((m) => (
-                    <button key={m} type="button" disabled={m === 'voice' && !speech.supported} onClick={() => setMode(m)} aria-pressed={mode === m} className={cn('flex items-center justify-center gap-1.5 rounded-lg border p-2 text-sm font-medium disabled:opacity-50', mode === m ? 'border-brand-400 bg-brand-50 text-brand-700' : 'border-line')}>
+                    <button key={m} type="button" disabled={m === 'voice' && !recordingSupported()} onClick={() => setMode(m)} aria-pressed={mode === m} className={cn('flex items-center justify-center gap-1.5 rounded-lg border p-2 text-sm font-medium disabled:opacity-50', mode === m ? 'border-brand-400 bg-brand-50 text-brand-700' : 'border-line')}>
                       {m === 'voice' ? <Mic className="size-4" /> : <Keyboard className="size-4" />} {m === 'voice' ? 'Voice' : 'Text'}
                     </button>
                   ))}
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="lang">Speech language</Label>
+                <Label htmlFor="lang">Interviewer accent (browser voice)</Label>
                 <Select id="lang" value={lang} onChange={(e) => setLang(e.target.value)}>
                   <option value="en-IN">English (India)</option>
                   <option value="en-US">English (US)</option>
@@ -290,13 +335,24 @@ export default function InterviewRoom() {
               </div>
             </div>
             {mode === 'voice' && (
-              <Alert tone="info" title="How voice answers work">
-                Questions are read aloud by your browser. Recording only starts when you press <strong>Start speaking</strong> and stops when you press <strong>Stop</strong>. Your browser converts speech to text (in Chrome and Edge this uses the browser’s online speech service); you can review and edit the transcript before submitting. Only the text is sent to InterviewOS.
-              </Alert>
+              <>
+                <label className="flex items-start gap-3 rounded-lg border border-line p-3">
+                  <input type="checkbox" className="mt-1" checked={handsFree} onChange={(e) => setHandsFree(e.target.checked)} />
+                  <span className="text-sm">
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <Headphones className="size-4" aria-hidden /> Hands-free conversation
+                    </span>
+                    <span className="text-ink-500">
+                      After the interviewer finishes speaking, the microphone turns on automatically. Pause for about 2 seconds when you’re done and your answer is transcribed and submitted. The interviewer then gives spoken feedback and asks the next question.
+                    </span>
+                  </span>
+                </label>
+                <Alert tone="info" title="How voice works">
+                  The interviewer’s questions and feedback are spoken aloud. Your microphone records only while the red “Listening” indicator is shown. The recording is sent to InterviewOS to be transcribed and is not stored; only the text of your answer is saved. You can always edit the transcript or type instead.
+                </Alert>
+              </>
             )}
-            {mode === 'voice' && mic === 'denied' && (
-              <Alert tone="warning">Microphone access is blocked for this site. Allow it in your browser’s site settings, or use text mode.</Alert>
-            )}
+            {mode === 'voice' && mic === 'denied' && <Alert tone="warning">Microphone access is blocked for this site. Allow it in your browser’s site settings, or use text mode.</Alert>}
             <Button size="lg" onClick={() => next.mutate()} loading={next.isPending}>
               {session.status === 'in_progress' ? 'Continue interview' : 'Start interview'}
             </Button>
@@ -308,8 +364,8 @@ export default function InterviewRoom() {
       {question && phase !== 'ready' && (
         <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
           <div className="space-y-4">
-            <QuestionCard q={question} speaking={speaking} canSpeak={ttsSupported()} onRepeat={() => say(question.question_text)} />
-            <div className="flex items-center gap-2">
+            <QuestionCard q={question} speaking={speaking} canSpeak={mode === 'voice'} onRepeat={() => void say(question.question_text)} />
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 variant="ghost"
@@ -323,10 +379,32 @@ export default function InterviewRoom() {
               >
                 {muted ? <VolumeX /> : <Volume2 />} {muted ? 'Interviewer muted' : 'Mute interviewer'}
               </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setMode(mode === 'voice' ? 'text' : 'voice')} disabled={!speech.supported && mode === 'text'}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  recorder.stop()
+                  stopSpeaking()
+                  setSpeaking(false)
+                  setMode(mode === 'voice' ? 'text' : 'voice')
+                }}
+                disabled={!recordingSupported() && mode === 'text'}
+              >
                 {mode === 'voice' ? <Keyboard /> : <Mic />} Switch to {mode === 'voice' ? 'typing' : 'voice'}
               </Button>
+              {mode === 'voice' && (
+                <label className="ml-1 flex items-center gap-1.5 text-xs text-ink-500">
+                  <input type="checkbox" checked={handsFree} onChange={(e) => setHandsFree(e.target.checked)} /> Hands-free
+                </label>
+              )}
             </div>
+            {status && (
+              <p className={cn('flex items-center gap-2 text-sm font-medium', status.tone)} role="status" aria-live="polite">
+                {recording ? <span className="size-2.5 animate-pulse rounded-full bg-rose-600" /> : <Loader2 className="size-4 animate-spin" />}
+                {status.text}
+              </p>
+            )}
           </div>
 
           <div className="space-y-4">
@@ -335,35 +413,49 @@ export default function InterviewRoom() {
                 <CardContent className="space-y-4 pt-5">
                   {isCoding && <CodeEditor value={code} onChange={setCode} language={codeLang} onLanguage={setCodeLang} />}
 
-                  {mode === 'voice' && speech.supported && (
+                  {mode === 'voice' && (
                     <div className="flex flex-wrap items-center gap-3">
-                      <Button type="button" variant={speech.listening ? 'danger' : 'primary'} onClick={toggleMic}>
-                        {speech.listening ? <MicOff /> : <Mic />} {speech.listening ? 'Stop speaking' : 'Start speaking'}
-                      </Button>
-                      {speech.listening && (
-                        <span className="inline-flex items-center gap-2 text-sm text-rose-600" role="status">
-                          <span className="size-2 animate-pulse rounded-full bg-rose-600" /> Listening…
-                        </span>
+                      {recording ? (
+                        <Button type="button" variant="danger" onClick={() => recorder.stop()}>
+                          <Square /> Stop and transcribe
+                        </Button>
+                      ) : (
+                        <Button type="button" onClick={() => void listen()} disabled={transcribing || submit.isPending}>
+                          <Mic /> {answer.trim() ? 'Add more by speaking' : 'Start speaking'}
+                        </Button>
+                      )}
+                      {recording && (
+                        <div className="flex h-8 flex-1 items-center gap-0.5" aria-hidden>
+                          {Array.from({ length: 24 }).map((_, i) => (
+                            <span key={i} className="w-1 rounded-full bg-rose-500 transition-all" style={{ height: `${Math.max(8, Math.min(100, recorder.level * 100 * (0.5 + Math.abs(Math.sin(i * 1.7 + recorder.seconds)))))}%` }} />
+                          ))}
+                        </div>
                       )}
                     </div>
                   )}
-                  {speech.error && <Alert tone="warning">{speech.error}</Alert>}
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="answer">{isCoding ? 'Explain your approach (optional)' : mode === 'voice' ? 'Transcript — review and edit before submitting' : 'Your answer'}</Label>
-                    <Textarea id="answer" value={answer} onChange={(e) => setAnswer(e.target.value)} rows={isCoding ? 4 : 9} maxLength={15000} readOnly={speech.listening} placeholder={mode === 'voice' ? 'Press “Start speaking” and your words will appear here.' : 'Type your answer. Structure it as you would out loud.'} />
-                    {speech.listening && speech.interim && <p className="text-sm italic text-ink-400">{speech.interim}</p>}
+                    <Label htmlFor="answer">{isCoding ? 'Explain your approach (optional)' : mode === 'voice' ? 'Your answer (transcribed — you can edit it)' : 'Your answer'}</Label>
+                    <Textarea
+                      id="answer"
+                      value={answer}
+                      onChange={(e) => setAnswer(e.target.value)}
+                      rows={isCoding ? 4 : 8}
+                      maxLength={15000}
+                      readOnly={recording || transcribing}
+                      placeholder={mode === 'voice' ? 'Press “Start speaking” — your words will appear here after you stop.' : 'Type your answer. Structure it as you would out loud.'}
+                    />
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <span className="text-xs text-ink-400">{answer.trim() ? `${answer.trim().split(/\s+/).length} words` : ''}</span>
                     <Button
                       onClick={() => {
-                        speech.stop()
+                        recorder.stop()
                         stopSpeaking()
-                        submit.mutate()
+                        submit.mutate(undefined)
                       }}
                       loading={submit.isPending}
-                      disabled={!canSubmit || speech.listening}
+                      disabled={!canSubmit || busy}
                     >
                       {submit.isPending ? 'Evaluating…' : 'Submit answer'}
                     </Button>
@@ -382,7 +474,14 @@ export default function InterviewRoom() {
                       Finish and see report
                     </Button>
                   ) : (
-                    <Button onClick={() => next.mutate()} loading={next.isPending || finish.isPending}>
+                    <Button
+                      onClick={() => {
+                        stopSpeaking()
+                        setSpeaking(false)
+                        next.mutate()
+                      }}
+                      loading={next.isPending || finish.isPending}
+                    >
                       {evaluation.needs_follow_up ? 'Answer follow-up' : 'Next question'}
                     </Button>
                   )}

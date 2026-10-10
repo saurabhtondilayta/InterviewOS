@@ -100,6 +100,21 @@ _DIFFICULTY_GUIDANCE = {
 }
 
 
+# Rotated per question so repeated practice on the same topic explores different ground.
+QUESTION_ANGLES = [
+    "explain a core concept and why it matters",
+    "a realistic scenario the candidate must reason through",
+    "debugging or troubleshooting a concrete problem",
+    "compare and contrast two related approaches",
+    "a design decision and its trade-offs",
+    "how would you implement or build it, step by step",
+    "a common misconception and what is actually true",
+    "performance, scaling or optimisation considerations",
+    "security, failure modes or edge cases",
+    "apply the concept to the candidate's own projects or experience",
+]
+
+
 def generate_question(
     *,
     role_title: str,
@@ -112,22 +127,42 @@ def generate_question(
     company_context: str | None,
     asked_questions: list[str],
     weak_topics: list[str],
+    angle: str | None = None,
+    previous_questions: list[str] | None = None,
+    resume_focus: str | None = None,
 ) -> list[dict]:
+    resume_rule = ""
+    if kind == "resume":
+        resume_rule = (
+            "\n- Ground the question in ONE specific item from the resume (a named project, internship, technology or "
+            "achievement) and ask about the candidate's own decisions, challenges or results. Quote the item by name."
+        )
+    elif resume_summary:
+        resume_rule = (
+            "\n- If the resume shows the candidate has used a technology related to this topic, ground the question in "
+            "that experience; otherwise ask a standard question on the topic."
+        )
     task = f"""Write ONE original interview question.
 Question type: {kind} - {_KIND_GUIDANCE.get(kind, "")}
 Topic: {topic}
 Difficulty: {difficulty}/5 ({_DIFFICULTY_GUIDANCE[difficulty]})
 Role: {role_title} at {experience_level} level.
-- Do not repeat or closely paraphrase any previously asked question.
+Angle for this question: {angle or "any"}.
+- The question MUST be clearly different from every question listed as previously asked (this session or
+  earlier sessions): pick a different sub-topic, scenario or concept, not a rephrasing.
 - Do not claim the question is asked by any specific company.
 - expected_points: 3-6 key points a strong answer would cover (used for grading, hidden from the candidate).
 - Return kind="{kind}", topic="{topic}", difficulty={difficulty}.
-- For non-coding questions set every field in details to null."""
+- For non-coding questions set every field in details to null.{resume_rule}"""
     parts = [
         "Candidate skills: " + (", ".join(candidate_skills[:30]) or "not provided"),
         "Topics the candidate has struggled with before: " + (", ".join(weak_topics[:10]) or "none recorded"),
         "Previously asked in this session:\n" + ("\n".join(f"- {q}" for q in asked_questions) or "- none"),
+        "Asked in the candidate's earlier sessions (avoid these too):\n"
+        + ("\n".join(f"- {q}" for q in (previous_questions or [])[:25]) or "- none"),
     ]
+    if resume_focus:
+        parts.append("Focus this question on this resume detail: " + resume_focus)
     if kind == "resume" or resume_summary:
         parts.append(untrusted("resume", resume_summary, 6000))
     if company_context:

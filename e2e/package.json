@@ -11,7 +11,8 @@
                     "cleanup":  "tsx scripts/cleanup.ts",
                     "typecheck":  "tsc --noEmit",
                     "demo":  "npm run cleanup \u0026\u0026 cross-env SLOW_MO=700 playwright test tests/journey.spec.ts",
-                    "ui":  "playwright test --ui"
+                    "ui":  "playwright test --ui",
+                    "test:voice":  "playwright test tests/voice.spec.ts"
                 },
     "author":  "",
     "license":  "ISC",

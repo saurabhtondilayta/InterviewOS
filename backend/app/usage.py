@@ -18,7 +18,10 @@ logger = logging.getLogger("interviewos.usage")
 _FEATURE_DAILY_CAPS = {"resume_analysis": lambda s: s.resume_analyses_per_day}
 
 
-def _count_since(user_id: str, since: datetime, feature: str | None = None) -> int:
+VOICE_PREFIX = "voice_"
+
+
+def _count_since(user_id: str, since: datetime, feature: str | None = None, *, voice: bool = False) -> int:
     q = (
         admin_db()
         .table("usage_logs")
@@ -29,6 +32,10 @@ def _count_since(user_id: str, since: datetime, feature: str | None = None) -> i
     )
     if feature:
         q = q.eq("feature", feature)
+    elif voice:
+        q = q.like("feature", f"{VOICE_PREFIX}%")
+    else:
+        q = q.not_.like("feature", f"{VOICE_PREFIX}%")
     return q.execute().count or 0
 
 
@@ -36,12 +43,20 @@ def check_rate_limit(user_id: str, feature: str) -> None:
     s = get_settings()
     now = datetime.now(UTC)
 
+    # Voice (speech-to-text / text-to-speech) has its own, larger allowance: a spoken interview
+    # makes several short audio calls per question.
+    if feature.startswith(VOICE_PREFIX):
+        if _count_since(user_id, now - timedelta(hours=1), voice=True) >= s.voice_requests_per_hour:
+            record(user_id, feature, status="rate_limited")
+            raise RateLimitedError("You've reached the hourly voice limit. Switch to typing or try again later.")
+        return
+
     hourly = _count_since(user_id, now - timedelta(hours=1))
     if hourly >= s.ai_requests_per_hour:
         record(user_id, feature, status="rate_limited")
         raise RateLimitedError(f"You've reached the limit of {s.ai_requests_per_hour} AI requests per hour. Please try again later.")
 
-    daily = _count_since(user_id, now - timedelta(days=1))
+    daily = _count_since(user_id, now - timedelta(days=1))  # text AI only
     if daily >= s.ai_requests_per_day:
         record(user_id, feature, status="rate_limited")
         raise RateLimitedError(f"You've reached today's limit of {s.ai_requests_per_day} AI requests.")

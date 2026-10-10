@@ -76,22 +76,40 @@ class AIClient:
         return self._http
 
     def _post(self, payload: dict, *, user_id: str | None, feature: str) -> dict:
+        """Chat Completions request; returns the parsed JSON body."""
+        s = get_settings()
+        if s.ai_reasoning_effort and "reasoning_effort" not in payload:
+            payload = {**payload, "reasoning_effort": s.ai_reasoning_effort}
+        resp = self._send("/chat/completions", user_id=user_id, feature=feature, model=payload.get("model"), json=payload)
+        return resp.json()
+
+    def _send(
+        self,
+        path: str,
+        *,
+        user_id: str | None,
+        feature: str,
+        model: str | None,
+        json: dict | None = None,
+        files: dict | None = None,
+        data: dict | None = None,
+    ) -> httpx.Response:
+        """POST to the provider with retries, rate-limit waits, usage logging and error translation."""
         s = get_settings()
         if not s.ai_configured:
             raise ServiceNotConfigured("The AI service is not configured. Ask the administrator to set AI_API_KEY on the backend.")
 
-        headers = {"Authorization": f"Bearer {s.ai_api_key}", "Content-Type": "application/json"}
-        if s.ai_reasoning_effort and "reasoning_effort" not in payload:
-            payload = {**payload, "reasoning_effort": s.ai_reasoning_effort}
+        headers = {"Authorization": f"Bearer {s.ai_api_key}"}
         attempts = s.ai_max_retries + 1
         last_error = "unknown"
+        last_body = ""
         started = time.monotonic()
         rate_limit_waited = 0.0
         attempt = 0
 
         while attempt < attempts:
             try:
-                resp = self._client().post("/chat/completions", json=payload, headers=headers)
+                resp = self._client().post(path, json=json, files=files, data=data, headers=headers)
             except httpx.TimeoutException:
                 last_error = "timeout"
                 logger.warning("AI provider timed out (attempt %d/%d)", attempt + 1, attempts)
@@ -100,19 +118,21 @@ class AIClient:
                 logger.warning("AI provider network error (attempt %d/%d): %s", attempt + 1, attempts, type(exc).__name__)
             else:
                 if resp.status_code == 200:
-                    data = resp.json()
-                    u = data.get("usage") or {}
+                    u: dict = {}
+                    if resp.headers.get("content-type", "").startswith("application/json"):
+                        u = (resp.json() or {}).get("usage") or {}
                     usage.record(
                         user_id,
                         feature,
                         status="ok",
-                        model=payload.get("model"),
+                        model=model,
                         prompt_tokens=u.get("prompt_tokens"),
                         completion_tokens=u.get("completion_tokens"),
                         latency_ms=int((time.monotonic() - started) * 1000),
                     )
-                    return data
+                    return resp
                 last_error = f"http_{resp.status_code}"
+                last_body = resp.text[:400]
                 # Provider error bodies contain no secrets; log them so operators can see the cause.
                 logger.warning("AI provider returned %s (attempt %d/%d): %s", resp.status_code, attempt + 1, attempts, resp.text[:400])
                 if resp.status_code in (400, 401, 403, 404, 413, 422):
@@ -139,10 +159,14 @@ class AIClient:
             user_id,
             feature,
             status="error",
-            model=payload.get("model"),
+            model=model,
             error_code=last_error,
             latency_ms=int((time.monotonic() - started) * 1000),
         )
+        if last_error == "http_400" and "terms acceptance" in last_body:
+            raise AIServiceError(
+                "This AI model must be enabled by the administrator (model terms not accepted yet).", code="ai_model_unavailable"
+            )
         if last_error == "http_413":
             raise AIServiceError(
                 "This request is too large for the AI plan's per-minute token limit. Wait a minute and try again, or use a shorter input.",
@@ -256,6 +280,43 @@ class AIClient:
             feature=feature,
         )
         return _message_content(data), model_name
+
+    # -- voice -----------------------------------------------------------------------
+    def transcribe(self, audio: bytes, *, filename: str, content_type: str, prompt: str | None, user_id: str | None) -> str:
+        """Speech-to-text (OpenAI-compatible /audio/transcriptions, e.g. Groq Whisper)."""
+        s = get_settings()
+        if not s.ai_stt_model:
+            raise ServiceNotConfigured("Voice transcription is not configured on the server.")
+        if user_id:
+            usage.check_rate_limit(user_id, "voice_transcribe")
+        form = {"model": s.ai_stt_model, "language": "en", "response_format": "json", "temperature": "0"}
+        if prompt:
+            form["prompt"] = prompt[:800]
+        resp = self._send(
+            "/audio/transcriptions",
+            user_id=user_id,
+            feature="voice_transcribe",
+            model=s.ai_stt_model,
+            files={"file": (filename, audio, content_type)},
+            data=form,
+        )
+        return str((resp.json() or {}).get("text", "")).strip()
+
+    def speak(self, text: str, *, user_id: str | None) -> bytes:
+        """Text-to-speech (OpenAI-compatible /audio/speech). Returns WAV audio bytes."""
+        s = get_settings()
+        if not s.ai_tts_model:
+            raise ServiceNotConfigured("Server voice is not configured.")
+        if user_id:
+            usage.check_rate_limit(user_id, "voice_speak")
+        resp = self._send(
+            "/audio/speech",
+            user_id=user_id,
+            feature="voice_speak",
+            model=s.ai_tts_model,
+            json={"model": s.ai_tts_model, "input": text, "voice": s.ai_tts_voice, "response_format": "wav"},
+        )
+        return resp.content
 
 
 def _message_content(data: dict) -> str:

@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from .config import get_settings
 from .errors import register_error_handlers
-from .routers import account, admin, chat, companies, dashboard, interviews, learning, profile, resumes
+from .routers import account, admin, chat, companies, dashboard, interviews, learning, profile, resumes, voice
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("interviewos")
@@ -55,7 +55,7 @@ def create_app() -> FastAPI:
     def health() -> dict:
         return {"status": "ok", "supabase_configured": s.supabase_configured, "ai_configured": s.ai_configured}
 
-    for r in (profile, resumes, companies, interviews, chat, learning, dashboard, account, admin):
+    for r in (profile, resumes, companies, interviews, chat, learning, dashboard, account, admin, voice):
         app.include_router(r.router)
     return app
 

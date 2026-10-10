@@ -34,6 +34,15 @@ class Settings(BaseSettings):
     # Leave empty for providers/models that don't support the parameter.
     ai_reasoning_effort: str = Field(default="", validation_alias=AliasChoices("AI_REASONING_EFFORT"))
 
+    # Voice (OpenAI-compatible audio endpoints on the same provider). Empty disables the feature.
+    # Groq: Whisper for speech-to-text; Orpheus for text-to-speech (its terms must be accepted once
+    # in the Groq console, otherwise the app falls back to the browser's built-in voice).
+    ai_stt_model: str = Field(default="whisper-large-v3-turbo", validation_alias=AliasChoices("AI_STT_MODEL"))
+    ai_tts_model: str = Field(default="canopylabs/orpheus-v1-english", validation_alias=AliasChoices("AI_TTS_MODEL"))
+    ai_tts_voice: str = Field(default="troy", validation_alias=AliasChoices("AI_TTS_VOICE"))
+    voice_requests_per_hour: int = 300
+    max_audio_bytes: int = 4 * 1024 * 1024  # Vercel request-body limit is 4.5 MB
+
     # CORS: comma-separated list of allowed frontend origins
     cors_origins: str = "http://localhost:5173"
 

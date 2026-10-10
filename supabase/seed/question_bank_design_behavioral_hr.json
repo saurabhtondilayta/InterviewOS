@@ -1,0 +1,80 @@
+[
+{"topic":"System Design Basics","kind":"system_design","difficulty":2,"q":"Design a URL shortener. What components and data model would you use?","p":["ID generation/encoding","key-value storage","redirect flow","caching hot links"]},
+{"topic":"System Design Basics","kind":"system_design","difficulty":2,"q":"How would you design a simple rate limiter for an API?","p":["token bucket or sliding window","per-user keys","shared store like Redis","response headers"]},
+{"topic":"System Design Basics","kind":"system_design","difficulty":3,"q":"Design a notification service that sends email, SMS and push notifications.","p":["queue-based","channel workers","retries and idempotency","user preferences"]},
+{"topic":"System Design Basics","kind":"system_design","difficulty":3,"q":"When and how would you add a cache to a web application? Discuss invalidation.","p":["read-heavy data","cache-aside","TTL and invalidation on write","stampede"]},
+{"topic":"System Design Basics","kind":"system_design","difficulty":3,"q":"Design a file upload and sharing service like a simple Google Drive.","p":["object storage","metadata DB","signed URLs","permissions"]},
+{"topic":"System Design Basics","kind":"system_design","difficulty":4,"q":"Design a real-time chat application for one million users.","p":["WebSockets","message storage and fan-out","presence","horizontal scaling"]},
+{"topic":"System Design Basics","kind":"system_design","difficulty":4,"q":"How would you design the backend for a news feed?","p":["fan-out on write vs read","ranking","caching","celebrity problem"]},
+{"topic":"System Design Basics","kind":"system_design","difficulty":5,"q":"Design a distributed job scheduler that runs millions of scheduled tasks reliably.","p":["partitioned storage","leader election or sharded workers","at-least-once with idempotency","monitoring"]},
+
+{"topic":"Cloud Architecture & Scalability","kind":"system_design","difficulty":2,"q":"How would you make a single-server web app highly available?","p":["multiple instances across zones","load balancer","managed database with failover","health checks"]},
+{"topic":"Cloud Architecture & Scalability","kind":"system_design","difficulty":3,"q":"Compare vertical and horizontal scaling and how stateless services help.","p":["bigger machine vs more machines","limits","externalise session state"]},
+{"topic":"Cloud Architecture & Scalability","kind":"system_design","difficulty":3,"q":"Design a serverless image-processing pipeline triggered by uploads.","p":["object storage event","function/queue","thumbnail storage","retries and DLQ"]},
+{"topic":"Cloud Architecture & Scalability","kind":"system_design","difficulty":4,"q":"How would you design a multi-region architecture, and what are the data consistency challenges?","p":["active-active vs active-passive","replication lag","conflict resolution","DNS failover"]},
+{"topic":"Cloud Architecture & Scalability","kind":"system_design","difficulty":4,"q":"Design a backup and disaster recovery plan with defined RPO and RTO.","p":["define RPO/RTO","snapshots and cross-region copies","restore testing","runbooks"]},
+{"topic":"Cloud Architecture & Scalability","kind":"system_design","difficulty":5,"q":"Design a scalable logging and analytics platform for hundreds of services.","p":["agents/collectors","stream buffer","storage tiers","query and retention"]},
+
+{"topic":"ML System Design","kind":"system_design","difficulty":3,"q":"Design a spam detection system for a messaging app.","p":["features and labels","training pipeline","online inference latency","feedback loop"]},
+{"topic":"ML System Design","kind":"system_design","difficulty":3,"q":"How would you deploy and monitor a machine learning model in production?","p":["serving API/batch","versioning","data and prediction drift monitoring","rollback"]},
+{"topic":"ML System Design","kind":"system_design","difficulty":4,"q":"Design a product recommendation system for an e-commerce site.","p":["candidate generation and ranking","cold start","offline/online metrics","A/B testing"]},
+{"topic":"ML System Design","kind":"system_design","difficulty":4,"q":"How would you build a feature store and why is it useful?","p":["consistent features train/serve","online and offline stores","point-in-time correctness"]},
+{"topic":"ML System Design","kind":"system_design","difficulty":5,"q":"Design a retrieval-augmented question-answering system over company documents.","p":["chunking and embeddings","vector search","prompting with citations","evaluation and access control"]},
+
+{"topic":"Behavioral & Teamwork","kind":"behavioral","difficulty":1,"q":"Tell me about a time you worked in a team to complete a project. What was your role?","p":["STAR structure","specific personal contribution","outcome"]},
+{"topic":"Behavioral & Teamwork","kind":"behavioral","difficulty":2,"q":"Describe a situation where a teammate was not contributing. What did you do?","p":["empathetic conversation","clear expectations","escalation if needed","result"]},
+{"topic":"Behavioral & Teamwork","kind":"behavioral","difficulty":2,"q":"Tell me about a time you received critical feedback. How did you respond?","p":["specific feedback","reflection without defensiveness","changes made"]},
+{"topic":"Behavioral & Teamwork","kind":"behavioral","difficulty":3,"q":"Describe a time you had to learn a new technology quickly to deliver something.","p":["context and deadline","learning approach","application","result"]},
+{"topic":"Behavioral & Teamwork","kind":"behavioral","difficulty":3,"q":"Tell me about a time you disagreed with a technical decision. How was it resolved?","p":["respectful disagreement","data/arguments","commitment after decision"]},
+{"topic":"Behavioral & Teamwork","kind":"behavioral","difficulty":3,"q":"Tell me about a mistake you made on a project and what you learned.","p":["ownership","impact","fix","prevention"]},
+{"topic":"Behavioral & Teamwork","kind":"behavioral","difficulty":4,"q":"Describe a time you took initiative beyond your assigned responsibilities.","p":["problem noticed","action taken without being asked","measurable result"]},
+{"topic":"Behavioral & Teamwork","kind":"behavioral","difficulty":4,"q":"Tell me about a time you had to balance several deadlines at once.","p":["prioritisation method","communication","trade-offs","outcome"]},
+
+{"topic":"Teamwork & Collaboration","kind":"behavioral","difficulty":2,"q":"Describe how you divide work in a group project so everyone contributes.","p":["clarify goals","split by strengths","regular check-ins"]},
+{"topic":"Teamwork & Collaboration","kind":"behavioral","difficulty":3,"q":"Tell me about a time you helped a teammate who was struggling.","p":["noticing the problem","support offered","result for team"]},
+{"topic":"Teamwork & Collaboration","kind":"behavioral","difficulty":3,"q":"How do you collaborate with someone whose working style is very different from yours?","p":["understanding their style","adapting communication","shared agreements"]},
+{"topic":"Teamwork & Collaboration","kind":"behavioral","difficulty":4,"q":"Describe a project where communication broke down. What would you do differently?","p":["what failed","impact","specific improvements"]},
+
+{"topic":"Conflict Resolution","kind":"behavioral","difficulty":2,"q":"Tell me about a conflict in a team and how it was resolved.","p":["neutral description","your actions","resolution and relationship"]},
+{"topic":"Conflict Resolution","kind":"behavioral","difficulty":3,"q":"How would you handle a disagreement with your manager about priorities?","p":["understand their reasons","present data","agree and commit"]},
+{"topic":"Conflict Resolution","kind":"behavioral","difficulty":3,"q":"Describe a time you had to say no to a request. How did you handle it?","p":["reasoning","offering alternatives","maintaining relationship"]},
+{"topic":"Conflict Resolution","kind":"behavioral","difficulty":4,"q":"Tell me about a time two teammates were in conflict and you helped mediate.","p":["listen to both sides","find common goal","agreed next steps"]},
+
+{"topic":"Ownership & Leadership","kind":"behavioral","difficulty":2,"q":"Tell me about a time you led a project or event.","p":["goal","planning and delegation","challenges","result"]},
+{"topic":"Ownership & Leadership","kind":"behavioral","difficulty":3,"q":"Describe a time you owned a problem end to end, even though it wasn't fully your responsibility.","p":["ownership mindset","actions","follow-through"]},
+{"topic":"Ownership & Leadership","kind":"behavioral","difficulty":3,"q":"How do you motivate a team when a project is behind schedule?","p":["transparency","re-plan scope","recognise progress"]},
+{"topic":"Ownership & Leadership","kind":"behavioral","difficulty":4,"q":"Tell me about a decision you made with incomplete information.","p":["gathering what's available","risk assessment","decision and outcome","reflection"]},
+
+{"topic":"Handling Failure & Feedback","kind":"behavioral","difficulty":2,"q":"Tell me about a time something you built did not work as expected.","p":["what happened","how you debugged","what you learned"]},
+{"topic":"Handling Failure & Feedback","kind":"behavioral","difficulty":3,"q":"Describe your biggest academic or project setback and how you recovered.","p":["honest setback","response","improvement"]},
+{"topic":"Handling Failure & Feedback","kind":"behavioral","difficulty":3,"q":"How do you give constructive feedback to a peer?","p":["specific and timely","focus on behaviour","suggest improvement"]},
+{"topic":"Handling Failure & Feedback","kind":"behavioral","difficulty":4,"q":"Tell me about a time you missed a deadline. What did you change afterwards?","p":["ownership","communication with stakeholders","process change"]},
+
+{"topic":"Time Management & Prioritisation","kind":"behavioral","difficulty":2,"q":"How do you plan your week when you have classes, projects and placement preparation?","p":["planning method","prioritisation","buffer time"]},
+{"topic":"Time Management & Prioritisation","kind":"behavioral","difficulty":3,"q":"Tell me about a time you had to drop or delay something to meet a bigger goal.","p":["trade-off reasoning","communication","result"]},
+{"topic":"Time Management & Prioritisation","kind":"behavioral","difficulty":3,"q":"How do you avoid procrastination on long projects?","p":["break into milestones","deadlines and accountability","tracking"]},
+{"topic":"Time Management & Prioritisation","kind":"behavioral","difficulty":4,"q":"Describe how you decided what to build first in a project with limited time.","p":["impact vs effort","MVP thinking","outcome"]},
+
+{"topic":"HR & Motivation","kind":"hr","difficulty":1,"q":"Tell me about yourself.","p":["brief education background","key skills and projects","why this role"]},
+{"topic":"HR & Motivation","kind":"hr","difficulty":1,"q":"Why do you want to work in this role?","p":["genuine interest","relevant skills","career direction"]},
+{"topic":"HR & Motivation","kind":"hr","difficulty":2,"q":"Where do you see yourself in five years?","p":["realistic growth","skills to develop","alignment with role"]},
+{"topic":"HR & Motivation","kind":"hr","difficulty":2,"q":"What are your greatest strengths and one weakness you are working on?","p":["evidence-backed strengths","honest weakness","improvement actions"]},
+{"topic":"HR & Motivation","kind":"hr","difficulty":3,"q":"Why should we hire you over other candidates?","p":["specific differentiators","evidence","fit with role needs"]},
+{"topic":"HR & Motivation","kind":"hr","difficulty":3,"q":"Are you comfortable relocating or working in shifts? How do you approach that decision?","p":["honest answer","flexibility considerations","professional tone"]},
+
+{"topic":"Career Goals & Motivation","kind":"hr","difficulty":1,"q":"What made you choose computer science or your current field?","p":["genuine motivation","specific experience","continuing interest"]},
+{"topic":"Career Goals & Motivation","kind":"hr","difficulty":2,"q":"What kind of work environment helps you do your best work?","p":["specific preferences","adaptability","link to role"]},
+{"topic":"Career Goals & Motivation","kind":"hr","difficulty":3,"q":"What are you currently learning outside of your coursework, and why?","p":["specific learning","motivation","application"]},
+
+{"topic":"Strengths & Areas to Improve","kind":"hr","difficulty":1,"q":"How would your friends or teammates describe you?","p":["specific traits","example evidence"]},
+{"topic":"Strengths & Areas to Improve","kind":"hr","difficulty":2,"q":"What is one skill you improved significantly in the last year, and how?","p":["skill","method","measurable improvement"]},
+{"topic":"Strengths & Areas to Improve","kind":"hr","difficulty":3,"q":"Tell me about a weakness that once affected your work and how you addressed it.","p":["honest weakness","impact","steps taken","current state"]},
+
+{"topic":"Role & Organisation Fit","kind":"hr","difficulty":2,"q":"What do you know about the role you are applying for, and how do your skills match it?","p":["role responsibilities","matching skills with evidence","gaps and plan"]},
+{"topic":"Role & Organisation Fit","kind":"hr","difficulty":2,"q":"What do you expect from your first job and your first manager?","p":["learning and mentorship","realistic expectations","contribution"]},
+{"topic":"Role & Organisation Fit","kind":"hr","difficulty":3,"q":"Do you have any questions for us?","p":["thoughtful questions about team/work","growth and learning","avoid salary-only questions"]},
+
+{"topic":"Self-Introduction","kind":"hr","difficulty":1,"q":"Introduce yourself in under one minute as you would at the start of an interview.","p":["name and education","2-3 highlights","target role"]},
+{"topic":"Self-Introduction","kind":"hr","difficulty":2,"q":"Walk me through your resume.","p":["chronological, concise","key projects and outcomes","link to role"]},
+{"topic":"Self-Introduction","kind":"hr","difficulty":2,"q":"What is one achievement you are most proud of?","p":["specific achievement","your role","impact"]}
+]

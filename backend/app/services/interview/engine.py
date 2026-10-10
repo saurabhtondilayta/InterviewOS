@@ -19,6 +19,31 @@ from . import adaptive, rubric
 
 GRACE_MINUTES = 3
 
+# When the candidate has a resume, this share of the plan is spent on questions about it.
+RESUME_TOPIC = "Resume Deep-Dive"
+RESUME_TOPIC_SHARE = 0.3
+RESUME_BOOST_TYPES = {"technical", "full", "company", "behavioral", "system_design"}
+# Probability of using an unused verified bank question (when one exists) instead of generating one.
+BANK_SHARE = 0.55
+# Problem patterns rotated for coding questions so repeated practice covers different techniques.
+CODING_PATTERNS = [
+    "hash maps / counting",
+    "two pointers",
+    "sliding window",
+    "stack or monotonic stack",
+    "binary search",
+    "recursion / backtracking",
+    "greedy choice",
+    "dynamic programming",
+    "BFS / DFS on a graph or grid",
+    "binary trees",
+    "heaps / priority queues",
+    "string manipulation",
+    "intervals / sorting",
+    "prefix sums",
+    "linked lists",
+]
+
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
@@ -68,14 +93,18 @@ def create_session(ctx: RequestContext, cfg: dict) -> dict:
     if cfg.get("resume_id"):
         if not cctx.latest_resume(ctx.db, ctx.user_id, cfg["resume_id"]):
             raise NotFoundError("Resume not found.")
-    elif cfg["interview_type"] == "resume":
+    elif not cfg.get("is_practice"):
+        # Use the candidate's primary/latest resume automatically when they have uploaded one.
         resume = cctx.latest_resume(ctx.db, ctx.user_id)
-        if not resume:
+        if resume:
+            cfg["resume_id"] = resume["id"]
+        elif cfg["interview_type"] == "resume":
             raise ValidationFailed("Upload a resume before starting a resume-based interview.", code="resume_required")
-        cfg["resume_id"] = resume["id"]
 
     weak = cctx.weak_topics(ctx.db, ctx.user_id)
     plan_topics = adaptive.build_plan(cfg["interview_type"], competencies, cfg.get("topics"), weak)
+    if cfg.get("resume_id") and not cfg.get("topics") and cfg["interview_type"] in RESUME_BOOST_TYPES:
+        plan_topics = adaptive.add_resume_topic(plan_topics, RESUME_TOPIC, RESUME_TOPIC_SHARE)
     target = cfg.get("target_question_count") or adaptive.target_question_count(cfg["duration_minutes"], cfg["interview_type"])
 
     row = {
@@ -149,14 +178,16 @@ def _time_up(session: dict) -> bool:
 
 
 def _pick_bank_question(ctx: RequestContext, topic: str, kind: str, difficulty: int) -> dict | None:
+    """An unused verified bank question for the topic, preferring the exact difficulty, else +/-1."""
     rows = (
         ctx.admin.table("question_bank")
-        .select("id, question_text, expected_points")
+        .select("id, question_text, expected_points, difficulty")
         .eq("is_active", True)
         .ilike("topic", topic)
         .eq("kind", kind)
-        .eq("difficulty", difficulty)
-        .limit(25)
+        .gte("difficulty", max(1, difficulty - 1))
+        .lte("difficulty", min(5, difficulty + 1))
+        .limit(200)
         .execute()
         .data
         or []
@@ -174,7 +205,42 @@ def _pick_bank_question(ctx: RequestContext, topic: str, kind: str, difficulty: 
         or []
     }
     fresh = [r for r in rows if r["id"] not in used]
-    return random.choice(fresh) if fresh else None
+    exact = [r for r in fresh if r["difficulty"] == difficulty]
+    pool = exact or fresh
+    return random.choice(pool) if pool else None
+
+
+def _previous_questions(ctx: RequestContext, topic: str, limit: int = 25) -> list[str]:
+    """The candidate's most recent questions on this topic from earlier sessions (to avoid repeats)."""
+    rows = (
+        ctx.db.table("interview_questions")
+        .select("question_text, topic")
+        .eq("user_id", ctx.user_id)
+        .order("asked_at", desc=True)
+        .limit(200)
+        .execute()
+        .data
+        or []
+    )
+    return [r["question_text"] for r in rows if r["topic"].lower() == topic.lower()][:limit]
+
+
+def _pick_angle(kind: str, used: list[str]) -> str:
+    options = CODING_PATTERNS if kind == "coding" else prompts.QUESTION_ANGLES
+    fresh = [a for a in options if a not in used] or options
+    angle = random.choice(fresh)
+    return f"use the problem pattern: {angle}" if kind == "coding" else angle
+
+
+def _resume_focus(ctx: RequestContext, avoid: set[str], used_focus: list[str]) -> str | None:
+    """A specific resume item to ask about, taken from the candidate's latest resume analysis."""
+    analysis = cctx.latest_resume_analysis(ctx.db, ctx.user_id)
+    seeds = ((analysis or {}).get("result") or {}).get("interview_questions") or []
+    fresh = [q for q in seeds if q.get("question") not in avoid and q.get("based_on") not in used_focus]
+    if not fresh:
+        return None
+    seed = random.choice(fresh)
+    return f"{seed.get('based_on')} (for example: {seed.get('question')})"
 
 
 def next_question(ctx: RequestContext, session_id: str) -> dict:
@@ -240,7 +306,11 @@ def next_question(ctx: RequestContext, session_id: str) -> dict:
         chosen, reason = adaptive.select_next_topic(topics, states, last_topic)
         reason = f"{reason} Difficulty {difficulty}/5."
 
-        bank = _pick_bank_question(ctx, chosen.topic, chosen.kind, difficulty)
+        # Mix verified bank questions with freshly generated ones. Resume and coding questions are
+        # always generated (they need the resume / structured examples).
+        bank = None
+        if chosen.kind not in ("resume", "coding") and random.random() < BANK_SHARE:
+            bank = _pick_bank_question(ctx, chosen.topic, chosen.kind, difficulty)
         if bank:
             row = {
                 "topic": chosen.topic,
@@ -255,11 +325,20 @@ def next_question(ctx: RequestContext, session_id: str) -> dict:
             }
         else:
             company_context, _ = verified_company_context(ctx.db, s.get("company_id"), s.get("job_listing_id"))
+            # With a resume attached, ground resume, technical, behavioral and design questions in it.
             resume_summary = (
                 cctx.resume_summary_for_ai(ctx.db, ctx.user_id, s.get("resume_id"))
-                if chosen.kind == "resume" or s["interview_type"] in ("resume", "full", "company")
+                if s.get("resume_id") and chosen.kind in ("resume", "technical", "behavioral", "system_design")
                 else None
             )
+            previous = _previous_questions(ctx, chosen.topic)
+            angle = _pick_angle(chosen.kind, plan.get("angles_used", []))
+            plan["angles_used"] = [*plan.get("angles_used", []), angle][-12:]
+            resume_focus = None
+            if chosen.kind == "resume":
+                resume_focus = _resume_focus(ctx, set(previous) | set(asked_texts), plan.get("resume_focus_used", []))
+                if resume_focus:
+                    plan["resume_focus_used"] = [*plan.get("resume_focus_used", []), resume_focus.split(" (for example")[0]]
             gen, model = ai.structured(
                 prompts.generate_question(
                     role_title=s["role_title"],
@@ -272,12 +351,16 @@ def next_question(ctx: RequestContext, session_id: str) -> dict:
                     company_context=company_context,
                     asked_questions=asked_texts,
                     weak_topics=plan.get("weak_topics_used", []),
+                    angle=angle,
+                    previous_questions=previous,
+                    resume_focus=resume_focus,
                 ),
                 GeneratedQuestion,
                 user_id=ctx.user_id,
                 feature="interview_question",
-                temperature=0.8,
+                temperature=0.9,
             )
+            reason += f" Angle: {angle}." + (" Based on your resume." if chosen.kind == "resume" else "")
             row = {
                 "topic": chosen.topic,
                 "kind": chosen.kind,

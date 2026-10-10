@@ -152,10 +152,16 @@ test('10 · learning plan and task tracking', async () => {
   await aiCooldown('learning plan')
   await page.goto('/learning')
   const newPlan = page.getByRole('button', { name: 'New plan' })
-  if (await newPlan.isVisible()) await newPlan.click()
-  await page.getByRole('button', { name: 'Generate plan' }).click()
-  await expect(page.getByRole('heading', { name: /^Day 1\b/ })).toBeVisible({ timeout: AI_TIMEOUT })
-  // Click the first task like a user would (the real checkbox is visually hidden behind a styled box).
+  const generate = page.getByRole('button', { name: 'Generate plan' })
+  // Wait until the page has loaded: either the generate form (no plan yet) or an existing plan.
+  await expect(generate.or(newPlan)).toBeVisible()
+  if (await newPlan.isVisible()) await newPlan.click() // an older plan exists from a previous run
+  await generate.click()
+  // The form disappears once the new plan has been generated and shown.
+  await expect(generate).toBeHidden({ timeout: AI_TIMEOUT })
+  await expect(page.getByRole('heading', { name: /^Day 1\b/ })).toBeVisible()
+  await expect(page.getByText(/^0\/\d+ · 0%$/)).toBeVisible() // a fresh plan starts at 0
+  // Tick the first task like a user would (the real checkbox is visually hidden behind a styled box).
   await page.locator('label:has(input[type="checkbox"])').first().click()
   await expect(page.getByRole('checkbox').first()).toBeChecked()
   await expect(page.getByText(/^1\/\d+ · \d+%$/)).toBeVisible() // progress saved on the server

@@ -145,6 +145,18 @@ def build_plan(
     return unique
 
 
+def add_resume_topic(plan: list[PlanTopic], topic: str, share: float) -> list[PlanTopic]:
+    """Give resume-based questions a fixed share of the plan (unless the plan already has a resume topic)."""
+    if not plan or any(t.kind == "resume" for t in plan) or not 0 < share < 1:
+        return plan
+    total = sum(t.weight for t in plan) or 1.0
+    plan = [*plan, PlanTopic(topic, "resume", total * share / (1 - share))]
+    new_total = sum(t.weight for t in plan)
+    for t in plan:
+        t.weight = t.weight / new_total
+    return plan
+
+
 def target_question_count(duration_minutes: int, interview_type: str) -> int:
     per_q = MINUTES_PER_QUESTION.get(interview_type, DEFAULT_MINUTES_PER_QUESTION)
     return max(2, min(15, round(duration_minutes / per_q)))

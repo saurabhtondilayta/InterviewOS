@@ -124,6 +124,11 @@ class AnswerSubmit(_In):
     code_language: str | None = Field(default=None, max_length=30)
 
 
+class SpeakRequest(_In):
+    # Kept short: long audio responses would exceed hosting response-size limits.
+    text: str = Field(min_length=1, max_length=900)
+
+
 class ChatMessageIn(_In):
     conversation_id: str | None = None
     content: str = Field(min_length=1, max_length=4000)

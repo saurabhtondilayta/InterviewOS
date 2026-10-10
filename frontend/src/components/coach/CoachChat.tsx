@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bot, Check, Copy, Send } from 'lucide-react'
+import { Bot, Check, Copy, Send, Square, Volume2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Markdown } from '@/components/Markdown'
@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/form'
 import { AIDisclaimer, Alert, Spinner } from '@/components/ui/misc'
 import { api, errorMessage } from '@/lib/api'
+import { speak, stopSpeaking } from '@/lib/speech'
 import { cn } from '@/lib/utils'
 import type { ChatConversation, ChatMessage } from '@/types'
 
@@ -18,6 +19,28 @@ export const SUGGESTED_PROMPTS = [
   'I get nervous in interviews. What can I practise?',
   'Explain the difference between processes and threads',
 ]
+
+function ListenButton({ text }: { text: string }) {
+  const [playing, setPlaying] = useState(false)
+  return (
+    <button
+      onClick={async () => {
+        if (playing) {
+          stopSpeaking()
+          setPlaying(false)
+          return
+        }
+        setPlaying(true)
+        await speak(text)
+        setPlaying(false)
+      }}
+      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-ink-400 hover:bg-slate-100 hover:text-ink-700"
+      aria-label={playing ? 'Stop reading aloud' : 'Read response aloud'}
+    >
+      {playing ? <Square className="size-3" /> : <Volume2 className="size-3" />} {playing ? 'Stop' : 'Listen'}
+    </button>
+  )
+}
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
@@ -113,7 +136,10 @@ export function CoachChat({ conversationId, onConversationCreated, compact = fal
                 <Markdown>{m.content}</Markdown>
                 <div className="mt-2 flex items-center justify-between gap-2 border-t border-line pt-1.5">
                   <span className="text-[0.7rem] text-ink-400">AI-generated</span>
-                  <CopyButton text={m.content} />
+                  <span className="flex gap-1">
+                    <ListenButton text={m.content} />
+                    <CopyButton text={m.content} />
+                  </span>
                 </div>
               </div>
             )}

@@ -9,7 +9,7 @@ import { Alert, Badge, PageHeader, PageLoader } from '@/components/ui/misc'
 import { TagInput } from '@/components/ui/tag-input'
 import { useCompanies, useJobRoles, useProfile, useResumes } from '@/hooks/queries'
 import { api, errorMessage } from '@/lib/api'
-import { getRecognitionCtor } from '@/lib/speech'
+import { recordingSupported } from '@/lib/speech'
 import { cn, INTERVIEW_TYPE_LABELS } from '@/lib/utils'
 import type { Company, InterviewSession, InterviewType, JobListing } from '@/types'
 
@@ -53,7 +53,7 @@ export default function InterviewSetup() {
   const [difficulty, setDifficulty] = useState(3)
   const [duration, setDuration] = useState(20)
   const [topics, setTopics] = useState<string[]>(params.get('topic') ? [params.get('topic')!] : [])
-  const [mode, setMode] = useState<'voice' | 'text'>(getRecognitionCtor() ? 'voice' : 'text')
+  const [mode, setMode] = useState<'voice' | 'text'>(recordingSupported() ? 'voice' : 'text')
   const [resumeId, setResumeId] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -258,7 +258,7 @@ export default function InterviewSetup() {
                       key={m}
                       onClick={() => setMode(m)}
                       aria-pressed={mode === m}
-                      disabled={m === 'voice' && !getRecognitionCtor()}
+                      disabled={m === 'voice' && !recordingSupported()}
                       className={cn('flex items-center justify-center gap-2 rounded-lg border p-3 text-sm font-medium disabled:opacity-50', mode === m ? 'border-brand-400 bg-brand-50 text-brand-700' : 'border-line hover:bg-slate-50')}
                     >
                       {m === 'voice' ? <Mic className="size-4" /> : <Keyboard className="size-4" />}
@@ -266,7 +266,7 @@ export default function InterviewSetup() {
                     </button>
                   ))}
                 </div>
-                {!getRecognitionCtor() && <p className="text-xs text-ink-500">Speech recognition isn’t available in this browser. Use Chrome, Edge or Safari for voice answers.</p>}
+                {!recordingSupported() && <p className="text-xs text-ink-500">Audio recording isn’t available in this browser. Use a recent Chrome, Edge, Firefox or Safari for voice answers.</p>}
               </div>
             </CardContent>
           </Card>
